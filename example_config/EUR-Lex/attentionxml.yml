@@ -41,4 +41,6 @@ network_config:
   freeze_embed_training: True
 
 # pretrained vocab / embeddings
-embed_file: glove.840B.300d # glove.6B.200d
+# embed_file: glove.840B.300d # glove.6B.200d
+embed_file: /home/eleven/dev/AttentionXML-MIMIC/data/EUR-Lex/emb_init.npy
+vocab_file: /home/eleven/dev/AttentionXML-MIMIC/data/EUR-Lex/vocab.npy

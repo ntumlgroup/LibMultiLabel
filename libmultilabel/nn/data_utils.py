@@ -304,8 +304,11 @@ def load_or_build_text_dict(
     """
     if vocab_file:
         logging.info(f"Load vocab from {vocab_file}")
-        with open(vocab_file, "r") as fp:
-            vocab_list = [[vocab.strip() for vocab in fp.readlines()]]
+        if vocab_file.endswith('.npy'):
+            vocab_list = [np.load(vocab_file)]
+        else:
+            with open(vocab_file, "r") as fp:
+                vocab_list = [[vocab.strip() for vocab in fp.readlines()]]
         # Keep PAD index 0 to align `padding_idx` of
         # class Embedding in libmultilabel.nn.networks.modules.
         vocabs = build_vocab_from_iterator(vocab_list, min_freq=1, specials=[PAD, UNK])
@@ -316,7 +319,6 @@ def load_or_build_text_dict(
         )
     vocabs.set_default_index(vocabs[UNK])
     logging.info(f"Read {len(vocabs)} vocabularies.")
-
     embedding_weights = get_embedding_weights_from_file(model_name, vocabs, embed_file, silent, embed_cache_dir)
 
     if normalize_embed:
@@ -386,14 +388,23 @@ def get_embedding_weights_from_file(model_name, word_dict, embed_file, silent=Fa
     load_embedding_from_file = embed_file not in pretrained_aliases
     if load_embedding_from_file:
         logging.info(f"Load pretrained embedding from file: {embed_file}.")
-        with open(embed_file) as f:
-            word_vectors = f.readlines()
-        embed_size = len(word_vectors[0].split()) - 1
         vector_dict = {}
-        for word_vector in tqdm(word_vectors, disable=silent, desc="Building token-embedding map"):
-            word, vector = word_vector.rstrip().split(" ", 1)
-            vector = torch.Tensor(list(map(float, vector.split())))
-            vector_dict[word] = vector
+        if embed_file.endswith('.npy'):
+            # load in order
+            vectors = np.load(embed_file)
+            embed_size = vectors.shape[0]
+            itos = word_dict.get_itos()
+            for i, vector in tqdm(enumerate(vectors)):
+                word = itos[i]
+                vector_dict[word] = vector
+        else:
+            with open(embed_file) as f:
+                word_vectors = f.readlines()
+            embed_size = len(word_vectors[0].split()) - 1
+            for word_vector in tqdm(word_vectors, disable=silent, desc="Building token-embedding map"):
+                word, vector = word_vector.rstrip().split(" ", 1)
+                vector = torch.Tensor(list(map(float, vector.split())))
+                vector_dict[word] = vector
     else:
         logging.info(f"Load pretrained embedding from torchtext.")
         # Adapted from https://pytorch.org/text/0.9.0/_modules/torchtext/vocab.html#Vocab.load_vectors.
