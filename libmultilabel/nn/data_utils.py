@@ -392,11 +392,11 @@ def get_embedding_weights_from_file(model_name, word_dict, embed_file, silent=Fa
         if embed_file.endswith('.npy'):
             # load in order
             vectors = np.load(embed_file)
-            embed_size = vectors.shape[0]
+            embed_size = vectors.shape[-1]
             itos = word_dict.get_itos()
             for i, vector in tqdm(enumerate(vectors)):
                 word = itos[i]
-                vector_dict[word] = vector
+                vector_dict[word] = torch.Tensor(vector)
         else:
             with open(embed_file) as f:
                 word_vectors = f.readlines()
