@@ -4,7 +4,7 @@ import os
 import lightning as L
 import torch
 from lightning.pytorch import seed_everything
-from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
+from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint, ModelSummary
 
 from ..nn import networks
 from ..nn.model import Model
@@ -163,7 +163,7 @@ def init_trainer(
         mode="min" if early_stopping_metric == "Loss" else "max",
         strict=False,
     )
-    callbacks = [early_stopping_callback]
+    callbacks = [early_stopping_callback, ModelSummary(max_depth=-1)]
     if save_checkpoints:
         callbacks += [
             ModelCheckpoint(
@@ -189,6 +189,8 @@ def init_trainer(
         deterministic="warn",
         gradient_clip_val=0.5,
         gradient_clip_algorithm="value",
+        # to profile standard training events, equivalent to `profiler=SimpleProfiler()`
+        # profiler="advanced",
     )
     return trainer
 
