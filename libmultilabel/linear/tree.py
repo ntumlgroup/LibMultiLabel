@@ -289,7 +289,7 @@ def _flatten_model(root: Node) -> tuple[linear.FlatModel, np.ndarray]:
 
     model = linear.FlatModel(
         name="flattened-tree",
-        weights=sparse.hstack(weights, "csr"),
+        weights=sparse.hstack(weights, "csc"),
         bias=bias,
         thresholds=0,
         multiclass=False,
