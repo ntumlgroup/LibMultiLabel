@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 
 import numpy as np
 import scipy.sparse as sparse
@@ -101,9 +102,8 @@ def train_1vsrest(
 
     if verbose:
         logging.info(f"Training one-vs-rest model on {num_class} labels")
-    for i in tqdm(range(num_class), disable=not verbose):
-        yi = y[:, i].toarray().reshape(-1)
-        weights[:, i] = _do_train(2 * yi - 1, x, options).ravel()
+    from .parallel import train_parallel_1vsrest
+    train_parallel_1vsrest(y, x, options, num_class, weights, verbose)
 
     return FlatModel(
         name="1vsrest",
@@ -159,7 +159,7 @@ def _prepare_options(x: sparse.csr_matrix, options: str) -> tuple[sparse.csr_mat
         options_split.append(f"-m {int(os.cpu_count() / 2)}")
 
     options = " ".join(options_split)
-    return x, options, bias
+    return x, re.sub(r"-m\s+\d+", "", options), bias
 
 
 def train_thresholding(
