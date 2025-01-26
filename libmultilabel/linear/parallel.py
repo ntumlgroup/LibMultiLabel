@@ -1,6 +1,6 @@
 import os
 import threading
-from queue import Queue
+from queue import SimpleQueue
 from tqdm import tqdm
 
 import numpy as np
@@ -17,8 +17,7 @@ class ParallelTrainer(threading.Thread):
     param: parameter
     weights: np.ndarray
     pbar: tqdm
-    queue: Queue[int]
-    lock: threading.Lock
+    queue: SimpleQueue[int]
 
     def __init__(self):
         threading.Thread.__init__(self)
@@ -52,8 +51,7 @@ class ParallelTrainer(threading.Thread):
         cls.param.w_recalc = True   # only works for solving L1/L2-SVM dual
         cls.weights = weights
         cls.pbar= tqdm(total=num_class, disable=not verbose)
-        cls.queue = Queue()
-        cls.lock = threading.Lock()
+        cls.queue = SimpleQueue()
 
         for i in range(num_class):
             cls.queue.put(i)
@@ -61,7 +59,6 @@ class ParallelTrainer(threading.Thread):
     @staticmethod
     def _do_parallel_train(prob: problem, param: parameter) -> np.matrix:
         """Wrapper around liblinear.liblinearutil.train.
-        Forcibly suppresses all IO regardless of options.
 
         Args:
             prob (problem): A liblinear.problem ready to train.
@@ -101,7 +98,7 @@ class ParallelTrainer(threading.Thread):
         # from liblinear later, GIL may break and race condition could happend in python.
         # Thus, instead of pre-compute a problem as class variable, we have to build
         # a new one for every OVR tasks)
-        prob = problem(np.ones((1, 1)), np.ones((1, 1)))
+        prob = problem([0], [[0]])
         for key in problem._names:
             setattr(prob, key, self.prob_var[key])  # overwrite with pre-computed attributes
 
@@ -117,11 +114,8 @@ class ParallelTrainer(threading.Thread):
             label_idx = self.queue.get()
 
             weight = self._do_parallel_train(self.set_problem(label_idx), self.param).ravel()
-
-            self.lock.acquire()
             self.weights[:, label_idx] = weight
             self.pbar.update()
-            self.lock.release()
 
 def train_parallel_1vsrest(
         y: sparse.csc_matrix,
