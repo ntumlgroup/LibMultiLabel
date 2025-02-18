@@ -32,8 +32,8 @@ class ParallelTrainer(threading.Thread):
         weights: np.ndarray,
         verbose: bool,
     ):
-        """Initialize the parallel trainer, setting y, x, parameter and threading related
-        variables as static variable of ParallelTrainer.
+        """Initialize the parallel trainer by setting y, x, parameter and threading related
+        variables as class variable of ParallelTrainer.
 
         Args:
             y (sparse.csr_matrix): A 0/1 matrix with dimensions number of instances * number of classes.
@@ -61,8 +61,8 @@ class ParallelTrainer(threading.Thread):
         """Wrapper around liblinear.liblinearutil.train.
 
         Args:
-            prob (problem): A liblinear.problem ready to train.
-            param (parameter): The liblinear.parameter passed to liblinear.
+            prob (problem): A preprocessed liblinear.problem instance.
+            param (parameter): A preprocessed liblinear.parameter instance.
 
         Returns:
             np.matrix: the weights.
@@ -85,8 +85,8 @@ class ParallelTrainer(threading.Thread):
             return w.copy()
 
     def set_problem(self, label_idx: int) -> problem:
-        """Prepare a problem for parallel training with given label index and
-        pre-computed x (**feature_node).
+        """Prepare a problem instance for parallel training using the
+        given label index and pre-computed x (POINTER(feature_node) * l).
 
         Args:
             label_idx (int): label index for the problem currently solving.
@@ -94,13 +94,13 @@ class ParallelTrainer(threading.Thread):
         Returns:
             problem: A problem prepared for liblinear.train.
         """
-        # Build a new problem in small cost (because we'll call train, which is C API
-        # from liblinear later, GIL may break and race condition could happend in python.
-        # Thus, instead of pre-compute a problem as class variable, we have to build
+        # Build a new problem in small cost. (Since we'll call train, which is C API from
+        # liblinear later, GIL may released and race condition could happen in python.
+        # Thus, instead of pre-computing a problem as class variable, we have to build
         # a new one for every OVR tasks)
         prob = problem([0], [[0]])
         for key in problem._names:
-            setattr(prob, key, self.prob_var[key])  # overwrite with pre-computed attributes
+            setattr(prob, key, self.prob_var[key])  # restore pre-computed attributes
 
         # Build y pointer with label index
         yi = self.y[:, label_idx].toarray().reshape(-1)
@@ -126,7 +126,7 @@ def train_parallel_1vsrest(
         verbose: bool,
     ):
     """Parallel training on labels when using one-vs-rest strategy,
-    and save trained weights by reference.
+    and saving trained weights by reference.
 
     Args:
         y (sparse.csr_matrix): A 0/1 matrix with dimensions number of instances * number of classes.
