@@ -5,9 +5,19 @@ from tqdm import tqdm
 
 import numpy as np
 import scipy.sparse as sparse
-from liblinear.liblinearutil import train, parameter, problem
+from liblinear.liblinearutil import train, parameter, problem, feature_node
 
-from ctypes import c_double
+import ctypes
+from dataclasses import dataclass
+
+@dataclass
+class PartialProblem(problem):
+    """A liblinear.problem with only C attributes"""
+    l: ctypes.c_int
+    n: ctypes.c_int
+    y: ctypes.POINTER(ctypes.c_double)
+    x: ctypes.POINTER(ctypes.POINTER(feature_node))
+    bias: ctypes.c_double
 
 class ParallelTrainer(threading.Thread):
     """A trainer for parallel 1vsrest training."""
@@ -94,17 +104,15 @@ class ParallelTrainer(threading.Thread):
         Returns:
             problem: A problem prepared for liblinear.train.
         """
-        # Build a new problem in small cost. (Since we'll call train, which is C API from
-        # liblinear later, GIL may released and race condition could happen in python.
-        # Thus, instead of pre-computing a problem as class variable, we have to build
-        # a new one for every OVR tasks)
-        prob = problem([0], [[0]])
-        for key in problem._names:
-            setattr(prob, key, self.prob_var[key])  # restore pre-computed attributes
+        # Build a new problem with prob_var (avoid x copy)
+        prob = PartialProblem(**self.prob_var)
+        # prob = problem([0], [[0]])
+        # for key in problem._names:
+        #     setattr(prob, key, self.prob_var[key])  # overwrite with pre-computed attributes
 
         # Build y pointer with label index
         yi = self.y[:, label_idx].toarray().reshape(-1)
-        y_prob = (c_double * prob.l)()
+        y_prob = (ctypes.c_double * prob.l)()
         np.ctypeslib.as_array(y_prob, (prob.l,))[:] = 2 * yi - 1
         prob.y = y_prob
         return prob
