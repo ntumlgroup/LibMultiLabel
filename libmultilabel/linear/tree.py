@@ -8,6 +8,7 @@ import sklearn.cluster
 import sklearn.preprocessing
 from tqdm import tqdm
 import psutil
+from dataclasses import dataclass
 
 from . import linear
 
@@ -47,12 +48,14 @@ class TreeModel:
         root: Node,
         flat_model: linear.FlatModel,
         weight_map: np.ndarray,
+        subtrees: list[SubTree],
     ):
         self.name = "tree"
         self.root = root
         self.flat_model = flat_model
         self.weight_map = weight_map
         self.multiclass = False
+        self.subtrees = subtrees
 
     def predict_values(
         self,
@@ -69,8 +72,55 @@ class TreeModel:
             np.ndarray: A matrix with dimension number of instances * number of classes.
         """
         # number of instances * number of labels + total number of metalabels
-        all_preds = linear.predict_values(self.flat_model, x)
+        all_preds = self._prune_tree_predictions(x, beam_width)
         return np.vstack([self._beam_search(all_preds[i], beam_width) for i in range(all_preds.shape[0])])
+
+    def _prune_tree_predictions(self, x: sparse.csr_matrix, beam_width: int) -> np.ndarray:
+        """Calculates the decision values associated with x.
+
+        If the beam width is smaller than the number of nodes at a some level, many nodes become unreachable, resulting in unnecessary computations.
+        In LibMultiLabel's default setting, the beam width is smaller than the root's degree in the tree.
+        To mitigate unnecessary computations, pruning is applied to predictions starting from the root.
+
+        Args:
+            x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
+            beam_width (int): Number of top candidate branches considered for prediction.
+
+        Returns:
+            np.ndarray: A matrix with dimension number of instances * (number of labels + total number of metalabels).
+        """
+        # Initialize space for all predictions with negative infinity
+        num_instances, num_labels = x.shape[0], self.weight_map[-1]
+        all_preds = np.full((num_instances, num_labels), np.NINF)
+
+        # Calculate root decision value and scores
+        root_preds = linear.predict_values(self.flat_model, x)
+        children_scores = 0.0 - np.maximum(0, 1 - root_preds) ** 2
+
+        slice = np.s_[:num_instances, self.weight_map[self.root.index] : self.weight_map[self.root.index + 1]]
+        all_preds[slice] = root_preds
+
+        if not self.root.isLeaf():
+            # Find the top k subtree for each instance
+            top_k_indices = np.argsort(-children_scores, axis=1, kind="stable")[:, :beam_width]
+
+            # Building a mapping from subtree to instances
+            subtree_to_instances = {
+                self.subtrees[subtree_idx]: np.where(top_k_indices == subtree_idx)[0]
+                for subtree_idx in np.unique(top_k_indices)
+            }
+
+            # Calculate predictions for each subtree with its corresponding instances
+            for subtree, instances in subtree_to_instances.items():
+                reduced_instances = x[np.s_[instances], :]
+                # Locate the position of the subtree root in the weight mapping of all nodes.
+                subtree_weights_start = self.weight_map[subtree.root.index]
+                subtree_weights_end = subtree_weights_start + subtree.flat_model.weights.shape[1]
+
+                slice = np.s_[instances, subtree_weights_start:subtree_weights_end]
+                all_preds[slice] = linear.predict_values(subtree.flat_model, reduced_instances)
+
+        return all_preds
 
     def _beam_search(self, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
         """Predict with beam search using cached probability estimates for a single instance.
@@ -102,12 +152,18 @@ class TreeModel:
             next_level = []
 
         num_labels = len(self.root.label_map)
-        scores = np.full(num_labels, 0.0)
+        scores = np.zeros(num_labels)
         for node, score in cur_level:
             slice = np.s_[self.weight_map[node.index] : self.weight_map[node.index + 1]]
             pred = instance_preds[slice]
             scores[node.label_map] = np.exp(score - np.square(np.maximum(0, 1 - pred)))
         return scores
+
+@dataclass(frozen=True)
+class SubTree:
+    """Represents a subtree with its root node and the linear flattened model which builts from the subtree's root."""
+    root: Node
+    flat_model: linear.FlatModel
 
 
 def train_tree(
@@ -162,7 +218,12 @@ def train_tree(
 
     pbar = tqdm(total=num_nodes, disable=not verbose)
 
+    index = 0
+
     def visit(node):
+        nonlocal index
+        node.index = index
+        index += 1
         if node.is_root:
             _train_node(y, x, options, node)
         else:
@@ -173,8 +234,7 @@ def train_tree(
     root.dfs(visit)
     pbar.close()
 
-    flat_model, weight_map = _flatten_model(root)
-    return TreeModel(root, flat_model, weight_map)
+    return _tree_model(root)
 
 
 def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, d: int, K: int, dmax: int) -> Node:
@@ -257,32 +317,22 @@ def _train_node(y: sparse.csr_matrix, x: sparse.csr_matrix, options: str, node: 
     node.model.weights = sparse.csc_matrix(node.model.weights)
 
 
-def _flatten_model(root: Node) -> tuple[linear.FlatModel, np.ndarray]:
+def _flatten_model(root: Node) -> linear.FlatModel:
     """Flattens tree weight matrices into a single weight matrix. The flattened weight
     matrix is used to predict all possible values, which is cached for beam search.
     This pessimizes complexity but is faster in practice.
-    Consecutive values of the returned map denotes the start and end indices of the
-    weights of each node. Conceptually, given root and node:
-        flat_model, weight_map = _flatten_model(root)
-        slice = np.s_[weight_map[node.index]:
-                      weight_map[node.index+1]]
-        node.model.weights == flat_model.weights[:, slice]
-
+        flat_model = _flatten_model(root)
     Args:
         root (Node): Root of the tree.
 
     Returns:
-        tuple[linear.FlatModel, np.ndarray]: The flattened model and the ranges of each node.
+        linear.FlatModel: The flattened model.
     """
-    index = 0
     weights = []
     bias = root.model.bias
 
     def visit(node):
         assert bias == node.model.bias
-        nonlocal index
-        node.index = index
-        index += 1
         weights.append(node.model.__dict__.pop("weights"))
 
     root.dfs(visit)
@@ -295,7 +345,55 @@ def _flatten_model(root: Node) -> tuple[linear.FlatModel, np.ndarray]:
         multiclass=False,
     )
 
-    # w.shape[1] is the number of labels/metalabels of each node
-    weight_map = np.cumsum([0] + list(map(lambda w: w.shape[1], weights)))
+    return model
 
-    return model, weight_map
+
+def _tree_model(root: Node) -> TreeModel:
+    """Constructs a tree model by aggregating the weights of all nodes in the tree.
+    To speed up inference in Python, we avoid using a single flattened weight matrix,
+    which would involve many unnecessary computations.
+    Instead, we build a hierarchical tree model by aggregating the weights of each root's child
+    into different flattened weight matrices, representing subtrees as `TreeModel` instances.
+    Additionally, the root itself is also a `TreeModel`, containing subtree `TreeModel` instances.
+
+    Consecutive values of the weight map denotes the start and end indices of the
+    weights of each node. Conceptually, given root and node:
+        slice = np.s_[weight_map[node.index]:
+                      weight_map[node.index+1]]
+        node.model.weights == flat_model.weights[:, slice]
+
+    Args:
+        root (Node): Root of the tree.
+
+    Returns:
+        Tree Model: A tree model containing the root's flattened model,
+                   weight index mappings of all nodes, and subtrees.
+    """
+    # Build weights mapping which contains the start and end indices of the weights of each node.
+    weight_map = [0]
+    subtrees = []
+    bias = root.model.bias
+
+    def visit(node):
+        assert bias == node.model.bias
+        # weights.shape[1] is the number of labels/metalabels of each node
+        weight_map.append(node.model.weights.shape[1])
+
+    root.dfs(visit)
+
+    weight_map = np.cumsum(weight_map)
+
+    # Build root's subtrees
+    for child in root.children:
+        child_flat_model = _flatten_model(child)
+        subtrees.append(SubTree(child, child_flat_model))
+    # Build root's flatten model with root model weights
+    model = linear.FlatModel(
+        name="root-flattened-tree",
+        weights=root.model.__dict__.pop("weights"),
+        bias=root.model.bias,
+        thresholds=0,
+        multiclass=False,
+    )
+
+    return TreeModel(root, model, weight_map, subtrees)
