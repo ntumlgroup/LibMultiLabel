@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 
 import numpy as np
 import scipy.sparse as sparse
 from liblinear.liblinearutil import train, problem, parameter
+from .parallel import train_parallel_1vsrest
 from tqdm import tqdm
 
 __all__ = [
@@ -95,15 +95,7 @@ def train_1vsrest(
     # Follows the MATLAB implementation at https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/multilabel/
     x, options, bias = _prepare_options(x, options)
 
-    y = y.tocsc()
-    num_class = y.shape[1]
-    num_feature = x.shape[1]
-    weights = np.zeros((num_feature, num_class), order="F")
-
-    if verbose:
-        logging.info(f"Training one-vs-rest model on {num_class} labels")
-    from .parallel import train_parallel_1vsrest
-    train_parallel_1vsrest(y, x, options, num_class, weights, verbose)
+    weights = train_parallel_1vsrest(y, x, options, verbose)
 
     return FlatModel(
         name="1vsrest",
@@ -159,7 +151,7 @@ def _prepare_options(x: sparse.csr_matrix, options: str) -> tuple[sparse.csr_mat
         options_split.append(f"-m {int(os.cpu_count() / 2)}")
 
     options = " ".join(options_split)
-    return x, re.sub(r"-m\s+\d+", "", options), bias
+    return x, options, bias
 
 
 def train_thresholding(
@@ -341,10 +333,11 @@ def _do_train(y: np.ndarray, x: sparse.csr_matrix, options: str) -> np.matrix:
 
     w = np.ctypeslib.as_array(model.w, (x.shape[1], 1))
     w = np.asmatrix(w)
-    # Liblinear flips +1/-1 labels so +1 is always the first label,
-    # but not if all labels are -1.
-    # For our usage, we need +1 to always be the first label,
-    # so the check is necessary.
+    # When all labels are -1, we must flip the sign of the weights
+    # because LIBLINEAR treats the first label as positive, which
+    # is -1 in this case. But for our usage we need them to be negative.
+    # For labels with both +1 and -1, LIBLINEAR guarantees that +1
+    # is always the first label.
     if model.get_labels()[0] == -1:
         return -w
     else:
