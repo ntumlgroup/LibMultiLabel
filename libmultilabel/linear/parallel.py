@@ -16,6 +16,7 @@ from ctypes import c_double
 
 class ParallelTrainer(threading.Thread):
     """A trainer for parallel 1vsrest training."""
+
     y: sparse.csc_matrix
     x: sparse.csr_matrix
     prob: problem
@@ -104,11 +105,11 @@ class ParallelTrainer(threading.Thread):
 
 
 def train_parallel_1vsrest(
-        y: sparse.csr_matrix,
-        x: sparse.csr_matrix,
-        options: str,
-        verbose: bool,
-    ) -> np.matrix:
+    y: sparse.csr_matrix,
+    x: sparse.csr_matrix,
+    options: str,
+    verbose: bool,
+) -> np.matrix:
     """Parallel training on labels when using one-vs-rest strategy.
 
     Args:

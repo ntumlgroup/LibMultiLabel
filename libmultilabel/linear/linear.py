@@ -327,7 +327,7 @@ def _do_train(y: np.ndarray, x: sparse.csr_matrix, options: str) -> np.matrix:
 
     prob = problem(y, x)
     param = parameter(options)
-    param.w_recalc = True   # only works for solving L1/L2-SVM dual
+    param.w_recalc = True  # only works for solving L1/L2-SVM dual
     with silent_stderr():
         model = train(prob, param)
 
