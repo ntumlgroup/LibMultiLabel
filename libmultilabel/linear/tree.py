@@ -59,7 +59,7 @@ class TreeModel:
         x: sparse.csr_matrix,
         beam_width: int = 10,
     ) -> np.ndarray:
-        """Calculates the probability estimates associated with x.
+        """Calculate the probability estimates associated with x.
 
         Args:
             x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
@@ -118,7 +118,7 @@ def train_tree(
     dmax=10,
     verbose: bool = True,
 ) -> TreeModel:
-    """Trains a linear model for multi-label data using a divide-and-conquer strategy.
+    """Train a linear model for multi-label data using a divide-and-conquer strategy.
     The algorithm used is based on https://github.com/xmc-aalto/bonsai.
 
     Args:
@@ -178,7 +178,7 @@ def train_tree(
 
 
 def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, d: int, K: int, dmax: int) -> Node:
-    """Builds the tree recursively by kmeans clustering.
+    """Build the tree recursively by kmeans clustering.
 
     Args:
         label_representation (sparse.csr_matrix): A matrix with dimensions number of classes under this node * number of features.
@@ -235,7 +235,7 @@ def get_estimated_model_size(root):
 
 
 def _train_node(y: sparse.csr_matrix, x: sparse.csr_matrix, options: str, node: Node):
-    """If node is internal, computes the metalabels representing each child and trains
+    """If node is internal, compute the metalabels representing each child and train
     on the metalabels. Otherwise, train on y.
 
     Args:
@@ -258,7 +258,7 @@ def _train_node(y: sparse.csr_matrix, x: sparse.csr_matrix, options: str, node: 
 
 
 def _flatten_model(root: Node) -> tuple[linear.FlatModel, np.ndarray]:
-    """Flattens tree weight matrices into a single weight matrix. The flattened weight
+    """Flatten tree weight matrices into a single weight matrix. The flattened weight
     matrix is used to predict all possible values, which is cached for beam search.
     This pessimizes complexity but is faster in practice.
     Consecutive values of the returned map denotes the start and end indices of the

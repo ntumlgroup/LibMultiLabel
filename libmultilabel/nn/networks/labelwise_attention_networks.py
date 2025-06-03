@@ -16,7 +16,7 @@ from .modules import (
 
 
 class LabelwiseAttentionNetwork(ABC, nn.Module):
-    """Base class for Labelwise Attention Network
+    """Base class for Labelwise Attention Network.
 
     Args:
         embed_vecs (torch.Tensor): The pre-trained word vectors of shape (vocab_size, embed_dim).
@@ -48,7 +48,7 @@ class LabelwiseAttentionNetwork(ABC, nn.Module):
 
 
 class RNNLWAN(LabelwiseAttentionNetwork):
-    """Base class for RNN Labelwise Attention Network"""
+    """Base class for RNN Labelwise Attention Network."""
 
     def forward(self, input):
         # (batch_size, sequence_length, embed_dim)
@@ -61,7 +61,7 @@ class RNNLWAN(LabelwiseAttentionNetwork):
 
 
 class BiGRULWAN(RNNLWAN):
-    """BiGRU Labelwise Attention Network
+    """BiGRU Labelwise Attention Network.
 
     Args:
         embed_vecs (torch.Tensor): The pre-trained word vectors of shape (vocab_size, embed_dim).
@@ -111,7 +111,7 @@ class BiGRULWAN(RNNLWAN):
 
 
 class BiLSTMLWAN(RNNLWAN):
-    """BiLSTM Labelwise Attention Network
+    """BiLSTM Labelwise Attention Network.
 
     Args:
         embed_vecs (torch.Tensor): The pre-trained word vectors of shape (vocab_size, embed_dim).
@@ -155,7 +155,7 @@ class BiLSTMLWAN(RNNLWAN):
 
 
 class BiLSTMLWMHAN(LabelwiseAttentionNetwork):
-    """BiLSTM Labelwise Multihead Attention Network
+    """BiLSTM Labelwise Multihead Attention Network.
 
     Args:
         embed_vecs (torch.Tensor): The pre-trained word vectors of shape (vocab_size, embed_dim).
@@ -217,7 +217,7 @@ class BiLSTMLWMHAN(LabelwiseAttentionNetwork):
 
 
 class CNNLWAN(LabelwiseAttentionNetwork):
-    """CNN Labelwise Attention Network
+    """CNN Labelwise Attention Network.
 
     Args:
         embed_vecs (torch.Tensor): The pre-trained word vectors of shape (vocab_size, embed_dim).

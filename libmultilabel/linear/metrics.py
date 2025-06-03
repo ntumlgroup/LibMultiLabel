@@ -8,7 +8,7 @@ __all__ = ["get_metrics", "compute_metrics", "tabulate_metrics", "MetricCollecti
 
 
 def _argsort_top_k(preds: np.ndarray, top_k: int) -> np.ndarray:
-    """Sorts the top k indices in O(n + k log k) time.
+    """Sort the top k indices in O(n + k log k) time.
     The sorting order is ascending to be consistent with np.sort.
     This means the last element is the largest, the first element is the kth largest.
     """
@@ -18,7 +18,7 @@ def _argsort_top_k(preds: np.ndarray, top_k: int) -> np.ndarray:
 
 
 def _dcg_argsort(argsort_preds: np.ndarray, target: np.ndarray, top_k: int) -> np.ndarray:
-    """Computes DCG@k with a sorted preds array and a target array."""
+    """Compute DCG@k with a sorted preds array and a target array."""
     top_k_idx = argsort_preds[:, -top_k:][:, ::-1]
     gains = np.take_along_axis(target, top_k_idx, axis=-1)
     discount = 1 / (np.log2(np.arange(top_k) + 2))
@@ -28,7 +28,7 @@ def _dcg_argsort(argsort_preds: np.ndarray, target: np.ndarray, top_k: int) -> n
 
 
 def _idcg(target: np.ndarray, top_k: int) -> np.ndarray:
-    """Computes IDCG@k for a 0/1 target array. A 0/1 target is a special case that
+    """Compute IDCG@k for a 0/1 target array. A 0/1 target is a special case that
     doesn't require sorting. If IDCG is computed with DCG,
     then target will need to be sorted, which incurs a large overhead.
     """
@@ -247,7 +247,7 @@ class MetricCollection(dict):
         self.max_k = max(getattr(metric, "top_k", 0) for metric in self.metrics.values())
 
     def update(self, preds: np.ndarray, target: np.ndarray):
-        """Adds a batch of decision values and labels.
+        """Add a batch of decision values and labels.
 
         Args:
             preds (np.ndarray): A matrix of decision values with dimensions number of instances * number of classes.
@@ -268,7 +268,7 @@ class MetricCollection(dict):
                 metric.update(preds, target)
 
     def compute(self) -> dict[str, float]:
-        """Computes the metrics from the accumulated batches of decision values and labels.
+        """Compute the metrics from the accumulated batches of decision values and labels.
 
         Returns:
             dict[str, float]: A dictionary of metric values.
@@ -279,7 +279,7 @@ class MetricCollection(dict):
         return ret
 
     def reset(self):
-        """Clears the accumulated batches of decision values and labels."""
+        """Clear the accumulated batches of decision values and labels."""
         for metric in self.metrics.values():
             metric.reset()
 

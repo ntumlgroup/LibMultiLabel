@@ -3,7 +3,7 @@ from transformers import AutoModelForSequenceClassification
 
 
 class BERT(nn.Module):
-    """BERT
+    """BERT.
 
     Args:
         num_classes (int): Total number of classes.

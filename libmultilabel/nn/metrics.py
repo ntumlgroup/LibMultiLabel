@@ -13,7 +13,7 @@ class _PrecisonRecallWrapperMetric(Metric):
     """Encapsulate common functions of RPrecision, PrecisionAtK, and RecallAtK.
 
     Args:
-        top_k (int): the top k relevant labels to evaluate.
+        top_k (int): The top k relevant labels to evaluate.
     """
 
     # If the metric state of one batch is independent of the state of other batches,
@@ -133,7 +133,7 @@ class NDCGAtK(Metric):
     As a result, we implement our own batch-wise NDCG.
 
     Args:
-        top_k (int): the top k relevant labels to evaluate.
+        top_k (int): The top k relevant labels to evaluate.
     """
 
     # If the metric state of one batch is independent of the state of other batches,
@@ -170,7 +170,7 @@ class NDCGAtK(Metric):
         return (gains * discount).sum(dim=1)
 
     def _idcg(self, target, discount):
-        """Computes IDCG@k for a 0/1 target tensor.
+        """Compute IDCG@k for a 0/1 target tensor.
         A 0/1 target is a special case that doesn't require sorting.
         """
         cum_discount = discount.cumsum(dim=0)

@@ -7,7 +7,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 
 class Embedding(nn.Module):
-    """Embedding layer with dropout
+    """Embedding layer with dropout.
 
     Args:
         embed_vecs (torch.Tensor): The pre-trained word vectors of shape (vocab_size, embed_dim).
@@ -26,7 +26,7 @@ class Embedding(nn.Module):
 
 
 class RNNEncoder(ABC, nn.Module):
-    """Base class of RNN encoder with dropout
+    """Base class of RNN encoder with dropout.
 
     Args:
         input_size (int): The number of expected features in the input.
@@ -55,7 +55,7 @@ class RNNEncoder(ABC, nn.Module):
 
 
 class GRUEncoder(RNNEncoder):
-    """Bi-directional GRU encoder with dropout
+    """Bi-directional GRU encoder with dropout.
 
     Args:
         input_size (int): The number of expected features in the input.
@@ -73,7 +73,7 @@ class GRUEncoder(RNNEncoder):
 
 
 class LSTMEncoder(RNNEncoder):
-    """Bi-directional LSTM encoder with dropout
+    """Bi-directional LSTM encoder with dropout.
 
     Args:
         input_size (int): The number of expected features in the input.
@@ -91,7 +91,7 @@ class LSTMEncoder(RNNEncoder):
 
 
 class CNNEncoder(nn.Module):
-    """Multi-filter-size CNN encoder for text classification with max-pooling
+    """Multi-filter-size CNN encoder for text classification with max-pooling.
 
     Args:
         input_size (int): The number of expected features in the input.
@@ -103,7 +103,7 @@ class CNNEncoder(nn.Module):
                         If num_pool = 0, do nothing.
                         If num_pool = 1, do typical max-pooling.
                         If num_pool > 1, do adaptive max-pooling.
-        channel_last (bool): Whether to transpose the dimension from (batch_size, num_channel, length) to (batch_size, length, num_channel)
+        channel_last (bool): Whether to transpose the dimension from (batch_size, num_channel, length) to (batch_size, length, num_channel).
     """
 
     def __init__(
@@ -149,8 +149,8 @@ class CNNEncoder(nn.Module):
 
 
 class LabelwiseAttention(nn.Module):
-    """Applies attention technique to summarize the sequence for each label
-    See `Explainable Prediction of Medical Codes from Clinical Text <https://aclanthology.org/N18-1100.pdf>`_
+    """Apply attention technique to summarize the sequence for each label.
+    See `Explainable Prediction of Medical Codes from Clinical Text <https://aclanthology.org/N18-1100.pdf>`_.
 
     Args:
         input_size (int): The number of expected features in the input.
@@ -171,7 +171,7 @@ class LabelwiseAttention(nn.Module):
 
 
 class LabelwiseMultiHeadAttention(nn.Module):
-    """Labelwise multi-head attention
+    """Labelwise multi-head attention.
 
     Args:
         input_size (int): The number of expected features in the input.
@@ -197,7 +197,7 @@ class LabelwiseMultiHeadAttention(nn.Module):
 
 
 class LabelwiseLinearOutput(nn.Module):
-    """Applies a linear transformation to the incoming data for each label
+    """Apply a linear transformation to the incoming data for each label.
 
     Args:
         input_size (int): The number of expected features in the input.

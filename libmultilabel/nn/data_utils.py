@@ -355,7 +355,7 @@ def get_embedding_weights_from_file(word_dict, embed_file, silent=False, cache=N
         cache (str, optional): Path to a directory for storing cached embeddings. Defaults to None.
 
     Returns:
-        torch.Tensor: Embedding weights (vocab_size, embed_size)
+        torch.Tensor: Embedding weights (vocab_size, embed_size).
     """
     # Load pretrained word embedding
     load_embedding_from_file = embed_file not in pretrained_aliases

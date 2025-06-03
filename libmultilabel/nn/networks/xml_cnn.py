@@ -6,7 +6,7 @@ from .modules import Embedding, CNNEncoder
 
 
 class XMLCNN(nn.Module):
-    """XML-CNN
+    """XML-CNN.
 
     Args:
         embed_vecs (torch.Tensor): The pre-trained word vectors of shape (vocab_size, embed_dim).

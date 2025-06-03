@@ -11,7 +11,7 @@ from ..nn.metrics import get_metrics, tabulate_metrics
 
 
 class MultiLabelModel(L.LightningModule):
-    """Abstract class handling Pytorch Lightning training flow
+    """Abstract class handling Pytorch Lightning training flow.
 
     Args:
         num_classes (int): Total number of classes.
@@ -70,7 +70,7 @@ class MultiLabelModel(L.LightningModule):
 
     @abstractmethod
     def shared_step(self, batch):
-        """Return loss and predicted logits"""
+        """Return loss and predicted logits."""
         return NotImplemented
 
     def configure_optimizers(self):
@@ -164,11 +164,11 @@ class MultiLabelModel(L.LightningModule):
         return {"top_k_pred": top_k_idx, "top_k_pred_scores": top_k_scores}
 
     def forward(self, batch):
-        """compute predicted logits"""
+        """Compute predicted logits."""
         return self.network(batch)["logits"]
 
     def print(self, *args, **kwargs):
-        """Prints only from process 0 and not in silent mode. Use this in any
+        """Print only from process 0 and not in silent mode. Use this in any
         distributed mode to log only once."""
 
         if not self.silent:

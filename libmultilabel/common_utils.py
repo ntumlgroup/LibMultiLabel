@@ -34,10 +34,10 @@ class AttributeDict(dict):
         self._used.discard(key)
 
     def used_items(self) -> dict:
-        """Returns the items that have been used at least once after being set.
+        """Return the items that have been used at least once after being set.
 
         Returns:
-            dict: the used items.
+            dict: The used items.
         """
         return {k: self[k] for k in self._used}
 
@@ -46,10 +46,10 @@ def dump_log(log_path, metrics=None, split=None, config=None):
     """Write log including the used items of config and the evaluation scores.
 
     Args:
-        log_path(str): path to log path
-        metrics (dict): metric and scores in dictionary format, defaults to None
-        split (str): val or test, defaults to None
-        config (dict): config to save, defaults to None
+        log_path(str): Path to log path.
+        metrics (dict): Metric and scores in dictionary format, defaults to None.
+        split (str): One of `val` or `test`, defaults to None.
+        config (dict): Config to save, defaults to None.
     """
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     if os.path.isfile(log_path):
@@ -82,7 +82,8 @@ def argsort_top_k(vals, k, axis=-1):
         k: Consider only the top k elements for each query
         axis: Axis along which to sort. The default is -1 (the last axis).
 
-    Returns: Array of indices that sort vals along the specified axis.
+    Returns: 
+        Array of indices that sort vals along the specified axis.
     """
     unsorted_top_k_idx = np.argpartition(vals, -k, axis=axis)[:, -k:]
     unsorted_top_k_scores = np.take_along_axis(vals, unsorted_top_k_idx, axis=axis)
@@ -130,7 +131,7 @@ def is_multiclass_dataset(dataset, label="label"):
 
 
 def timer(func):
-    """Log info-level wall time"""
+    """Log info-level wall time."""
 
     @wraps(func)
     def wrapper(*args, **kwargs):

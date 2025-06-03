@@ -31,7 +31,7 @@ LINEAR_TECHNIQUES = {
 
 
 def save_pipeline(checkpoint_dir: str, preprocessor: Preprocessor, model):
-    """Saves preprocessor and model to checkpoint_dir/linear_pipline.pickle.
+    """Save preprocessor and model to checkpoint_dir/linear_pipline.pickle.
 
     Args:
         checkpoint_dir (str): The directory to save to.
@@ -53,7 +53,7 @@ def save_pipeline(checkpoint_dir: str, preprocessor: Preprocessor, model):
 
 
 def load_pipeline(checkpoint_path: str) -> tuple[Preprocessor, Any]:
-    """Loads preprocessor and model from checkpoint_path.
+    """Load preprocessor and model from checkpoint_path.
 
     Args:
         checkpoint_path (str): The path to a previously saved pipeline.
