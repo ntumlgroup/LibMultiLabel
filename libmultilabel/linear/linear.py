@@ -5,8 +5,7 @@ import os
 
 import numpy as np
 import scipy.sparse as sparse
-from liblinear.liblinearutil import train, problem, parameter
-from .parallel import train_parallel_1vsrest
+from liblinear.liblinearutil import train, problem, parameter, solver_names
 from tqdm import tqdm
 
 __all__ = [
@@ -327,7 +326,8 @@ def _do_train(y: np.ndarray, x: sparse.csr_matrix, options: str) -> np.matrix:
 
     prob = problem(y, x)
     param = parameter(options)
-    param.w_recalc = True  # only works for solving L1/L2-SVM dual
+    if param.solver_type in [solver_names.L2R_L1LOSS_SVC_DUAL, solver_names.L2R_L2LOSS_SVC_DUAL]:
+        param.w_recalc = True  # only works for solving L1/L2-SVM dual
     with silent_stderr():
         model = train(prob, param)
 
@@ -590,7 +590,8 @@ def train_binary_and_multiclass(
 
     prob = problem(y, x)
     param = parameter(options)
-    param.w_recalc = True
+    if param.solver_type in [solver_names.L2R_L1LOSS_SVC_DUAL, solver_names.L2R_L2LOSS_SVC_DUAL]:
+        param.w_recalc = True
     with silent_stderr():
         model = train(prob, param)
 

@@ -1,4 +1,4 @@
-liblinear-multicore
+liblinear-multicore>=2.49.0
 numba
 pandas>1.3.0
 PyYAML
