@@ -124,7 +124,7 @@ class ParallelOVRTrainer(threading.Thread):
         cls.queue = queue.SimpleQueue()
 
         if verbose:
-            logging.info(f"Training an one-vs-rest model on {num_classes} labels")
+            logging.info(f"Training a one-vs-rest model on {num_classes} labels")
         for i in range(num_classes):
             cls.queue.put(i)
         cls.pbar = tqdm(total=num_classes, disable=not verbose)
