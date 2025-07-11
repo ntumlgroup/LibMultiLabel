@@ -64,7 +64,7 @@ class TreeModel:
         return np.maximum(0, 1 - x)
 
     def sigmoid_A(self, x, A):
-        return log_expit(A * x)
+        return -log_expit(A * x)
     
     def predict_values(
         self,
