@@ -56,15 +56,16 @@ class TreeModel:
         self.multiclass = False
         self._model_separated = False # Indicates whether the model has been separated for pruning tree.
         self.estimator = self.sigmoid_A
+        self.estimator_parameter = 3
 
-    def exp_L2(self, x, A):
+    def exp_L2(self, x):
         return np.square(np.maximum(0, 1 - x))
 
-    def exp_L1(self, x, A):
+    def exp_L1(self, x):
         return np.maximum(0, 1 - x)
 
-    def sigmoid_A(self, x, A):
-        return -log_expit(A * x)
+    def sigmoid_A(self, x):
+        return -log_expit(self.estimator_parameter * x)
     
     def predict_values(
         self,
@@ -91,6 +92,8 @@ class TreeModel:
         elif estimation_function == "sigmoid_A":
             self.estimator = self.sigmoid_A
 
+        self.estimator_parameter = estimation_parameter
+
         if beam_width >= len(self.root.children):
             # Beam_width is sufficiently large; pruning not applied.
             # Calculates decision values for all nodes.
@@ -100,8 +103,8 @@ class TreeModel:
             if not self._model_separated:
                 self._separate_model_for_pruning_tree()
                 self._model_separated = True
-            all_preds = self._prune_tree_and_predict_values(x, beam_width, estimation_parameter) # number of instances * (number of labels + total number of metalabels)
-        return np.vstack([self._beam_search(all_preds[i], beam_width, estimation_parameter) for i in range(all_preds.shape[0])])
+            all_preds = self._prune_tree_and_predict_values(x, beam_width) # number of instances * (number of labels + total number of metalabels)
+        return np.vstack([self._beam_search(all_preds[i], beam_width) for i in range(all_preds.shape[0])])
 
     def _separate_model_for_pruning_tree(self):
         """
@@ -132,7 +135,7 @@ class TreeModel:
             )
             self.subtree_models.append(subtree_flatmodel)
         
-    def _prune_tree_and_predict_values(self, x: sparse.csr_matrix, beam_width: int, estimation_parameter: int) -> np.ndarray:
+    def _prune_tree_and_predict_values(self, x: sparse.csr_matrix, beam_width: int) -> np.ndarray:
         """Calculates the selective decision values associated with instances x by evaluating only the most relevant subtrees.
 
         Only subtrees corresponding to the top beam_width candidates from the root are evaluated,
@@ -141,7 +144,6 @@ class TreeModel:
         Args:
             x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
             beam_width (int): Number of top candidate branches considered for prediction.
-            estimation_parameter (int): The extra parameter of probability estimation function if needed.
 
         Returns:
             np.ndarray: A matrix with dimension number of instances * (number of labels + total number of metalabels).
@@ -152,8 +154,7 @@ class TreeModel:
 
         # Calculate root decision values and scores
         root_preds = linear.predict_values(self.root_model, x)
-        print(estimation_parameter)
-        children_scores = 0.0 - self.estimator(root_preds, estimation_parameter)
+        children_scores = 0.0 - self.estimator(root_preds)
 
         slice = np.s_[:, self.node_ptr[self.root.index] : self.node_ptr[self.root.index + 1]]
         all_preds[slice] = root_preds
@@ -180,13 +181,12 @@ class TreeModel:
 
         return all_preds
 
-    def _beam_search(self, instance_preds: np.ndarray, beam_width: int, estimation_parameter:int) -> np.ndarray:
+    def _beam_search(self, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
         """Predict with beam search using cached probability estimates for a single instance.
 
         Args:
             instance_preds (np.ndarray): A vector of cached probability estimates of each node, has dimension number of labels + total number of metalabels.
             beam_width (int): Number of candidates considered.
-            estimation_parameter (int): The extra parameter of probability estimation function if needed.
 
         Returns:
             np.ndarray: A vector with dimension number of classes.
@@ -204,7 +204,7 @@ class TreeModel:
                     continue
                 slice = np.s_[self.node_ptr[node.index] : self.node_ptr[node.index + 1]]
                 pred = instance_preds[slice]
-                children_score = score - self.estimator(pred, estimation_parameter)
+                children_score = score - self.estimator(pred)
                 next_level.extend(zip(node.children, children_score.tolist()))
 
             cur_level = sorted(next_level, key=lambda pair: -pair[1])[:beam_width]
@@ -215,7 +215,7 @@ class TreeModel:
         for node, score in cur_level:
             slice = np.s_[self.node_ptr[node.index] : self.node_ptr[node.index + 1]]
             pred = instance_preds[slice]
-            scores[node.label_map] = np.exp(score - self.estimator(pred, estimation_parameter))
+            scores[node.label_map] = np.exp(score - self.estimator(pred))
         return scores
 
 
