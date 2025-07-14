@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 import libmultilabel.linear as linear
 from libmultilabel.common_utils import dump_log, is_multiclass_dataset
+from libmultilabel.linear.tree import train_ensemble_tree
 from libmultilabel.linear.utils import LINEAR_TECHNIQUES
 
 
@@ -21,7 +22,7 @@ def linear_test(config, model, datasets, label_mapping):
         scores = []
 
     predict_kwargs = {}
-    if model.name == "tree":
+    if model.name == "tree" or model.name == "ensemble-tree":
         predict_kwargs["beam_width"] = config.beam_width
 
     for i in tqdm(range(ceil(num_instance / config.eval_batch_size))):
@@ -48,13 +49,24 @@ def linear_train(datasets, config):
         if multiclass:
             raise ValueError("Tree model should only be used with multilabel datasets.")
 
-        model = LINEAR_TECHNIQUES[config.linear_technique](
-            datasets["train"]["y"],
-            datasets["train"]["x"],
-            options=config.liblinear_options,
-            K=config.tree_degree,
-            dmax=config.tree_max_depth,
-        )
+        if config.tree_ensemble_models > 1:
+            model = train_ensemble_tree(
+                datasets["train"]["y"],
+                datasets["train"]["x"],
+                options=config.liblinear_options,
+                K=config.tree_degree,
+                dmax=config.tree_max_depth,
+                n_trees=config.tree_ensemble_models,
+                seed=config.seed if config.seed is not None else 42,
+            )
+        else:
+            model = LINEAR_TECHNIQUES[config.linear_technique](
+                datasets["train"]["y"],
+                datasets["train"]["x"],
+                options=config.liblinear_options,
+                K=config.tree_degree,
+                dmax=config.tree_max_depth,
+            )
     else:
         model = LINEAR_TECHNIQUES[config.linear_technique](
             datasets["train"]["y"],
