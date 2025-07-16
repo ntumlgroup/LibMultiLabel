@@ -96,7 +96,7 @@ class ParallelOVRTrainer(threading.Thread):
     @classmethod
     def init_trainer(
         cls,
-        y: sparse.csc_matrix,
+        y: sparse.csr_matrix,
         x: sparse.csr_matrix,
         options: str,
         verbose: bool,
@@ -105,7 +105,7 @@ class ParallelOVRTrainer(threading.Thread):
         variables as class variables of ParallelOVRTrainer.
 
         Args:
-            y (sparse.csc_matrix): A 0/1 matrix with dimensions number of instances * number of classes.
+            y (sparse.csr_matrix): A 0/1 matrix with dimensions number of instances * number of classes.
             x (sparse.csr_matrix): A matrix with dimensions number of instances * number of features.
             options (str): The option string passed to liblinear.
             verbose (bool): Output extra progress information.
