@@ -6,7 +6,7 @@ import numpy as np
 import scipy.sparse as sparse
 import sklearn.cluster
 import sklearn.preprocessing
-import sklearn.utils
+
 from tqdm import tqdm
 import psutil
 
