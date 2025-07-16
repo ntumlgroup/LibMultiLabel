@@ -9,9 +9,10 @@ import sklearn.preprocessing
 import sklearn.utils
 from tqdm import tqdm
 import psutil
+
 from . import linear
 from scipy.special import log_expit
-#from sparsekmeans import LloydKmeans, ElkanKmeans
+
 
 __all__ = ["train_tree", "TreeModel", "train_ensemble_tree", "EnsembleTreeModel"]
 
@@ -71,7 +72,6 @@ class TreeModel:
 
     def _get_scores(self, pred, parent_score=0.0):
         if self._is_lr():
-            #return parent_score - np.log(1 + np.exp(-pred))
             return parent_score + log_expit(pred)
         else:
             return parent_score - np.square(np.maximum(0, 1 - pred))
@@ -133,11 +133,14 @@ class TreeModel:
 
     def _prune_tree_and_predict_values(self, x: sparse.csr_matrix, beam_width: int) -> np.ndarray:
         """Calculates the selective decision values associated with instances x by evaluating only the most relevant subtrees.
+
         Only subtrees corresponding to the top beam_width candidates from the root are evaluated,
         skipping the rest to avoid unnecessary computation.
+        
         Args:
             x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
             beam_width (int): Number of top candidate branches considered for prediction.
+
         Returns:
             np.ndarray: A matrix with dimension number of instances * (number of labels + total number of metalabels).
         """
@@ -206,7 +209,7 @@ class TreeModel:
             next_level = []
 
         num_labels = len(self.root.label_map)
-        scores = np.full(num_labels, 0.0)
+        scores = np.zeros(num_labels)
         for node, score in cur_level:
             slice = np.s_[self.node_ptr[node.index] : self.node_ptr[node.index + 1]]
             pred = instance_preds[slice]
