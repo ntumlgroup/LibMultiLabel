@@ -81,7 +81,7 @@ class TreeModel:
         x: sparse.csr_matrix,
         beam_width: int = 10,
     ) -> np.ndarray:
-        """Calculates the probability estimates associated with x.
+        """Calculate the probability estimates associated with x.
 
         Args:
             x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
@@ -166,8 +166,6 @@ class TreeModel:
         for subtree_idx in range(len(self.root.children)):
             subtree_model = self.subtree_models[subtree_idx]
             instances_mask = mask[:, subtree_idx]
-            if not np.any(instances_mask):
-                continue
             reduced_instances = x[np.s_[instances_mask], :]
 
             # Locate the position of the subtree root in the weight mapping of all nodes
