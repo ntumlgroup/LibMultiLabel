@@ -57,7 +57,7 @@ class TreeModel:
         self.node_ptr = node_ptr
         self.options = options
         self.multiclass = False
-        self._model_separated = False # Indicates whether the model has been separated for pruning tree.
+        self._model_separated = False  # Indicates whether the model has been separated for pruning tree.
 
     def _is_lr(self) -> bool:
         options = self.options or ""
@@ -92,13 +92,17 @@ class TreeModel:
         if beam_width >= len(self.root.children):
             # Beam_width is sufficiently large; pruning not applied.
             # Calculates decision values for all nodes.
-            all_preds = linear.predict_values(self.flat_model, x) # number of instances * (number of labels + total number of metalabels)
+            all_preds = linear.predict_values(
+                self.flat_model, x
+            )  # number of instances * (number of labels + total number of metalabels)
         else:
             # Beam_width is small; pruning applied to reduce computation.
             if not self._model_separated:
                 self._separate_model_for_pruning_tree()
                 self._model_separated = True
-            all_preds = self._prune_tree_and_predict_values(x, beam_width) # number of instances * (number of labels + total number of metalabels)
+            all_preds = self._prune_tree_and_predict_values(
+                x, beam_width
+            )  # number of instances * (number of labels + total number of metalabels)
         return np.vstack([self._beam_search(all_preds[i], beam_width) for i in range(all_preds.shape[0])])
 
     def _separate_model_for_pruning_tree(self):
@@ -106,27 +110,21 @@ class TreeModel:
         This function separates the weights for the root node and its children into (K+1) FlatModel
         for efficient beam search traversal in Python.
         """
-        tree_flat_model_params = {
-            'bias': self.root.model.bias,
-            'thresholds': 0,
-            'multiclass': False
-        }
+        tree_flat_model_params = {"bias": self.root.model.bias, "thresholds": 0, "multiclass": False}
         slice = np.s_[:, self.node_ptr[self.root.index] : self.node_ptr[self.root.index + 1]]
         self.root_model = linear.FlatModel(
-            name="root-flattened-tree",
-            weights=self.flat_model.weights[slice].tocsr(),
-            **tree_flat_model_params
+            name="root-flattened-tree", weights=self.flat_model.weights[slice].tocsr(), **tree_flat_model_params
         )
 
         self.subtree_models = []
         for i in range(len(self.root.children)):
             subtree_weights_start = self.node_ptr[self.root.children[i].index]
-            subtree_weights_end = self.node_ptr[self.root.children[i+1].index] if i+1 < len(self.root.children) else -1
+            subtree_weights_end = (
+                self.node_ptr[self.root.children[i + 1].index] if i + 1 < len(self.root.children) else -1
+            )
             slice = np.s_[:, subtree_weights_start:subtree_weights_end]
             subtree_flatmodel = linear.FlatModel(
-                name="subtree-flattened-tree",
-                weights=self.flat_model.weights[slice].tocsr(),
-                **tree_flat_model_params
+                name="subtree-flattened-tree", weights=self.flat_model.weights[slice].tocsr(), **tree_flat_model_params
             )
             self.subtree_models.append(subtree_flatmodel)
 
@@ -135,7 +133,7 @@ class TreeModel:
 
         Only subtrees corresponding to the top beam_width candidates from the root are evaluated,
         skipping the rest to avoid unnecessary computation.
-        
+
         Args:
             x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
             beam_width (int): Number of top candidate branches considered for prediction.
@@ -160,7 +158,7 @@ class TreeModel:
         # Build a mask where mask[i, j] is True if the j-th subtree is among the top beam_width subtrees for the i-th instance
         mask = np.zeros_like(children_scores, dtype=np.bool_)
         np.put_along_axis(mask, top_beam_width_indices, True, axis=1)
-        
+
         # Calculate predictions for each subtree with its corresponding instances
         for subtree_idx in range(len(self.root.children)):
             subtree_model = self.subtree_models[subtree_idx]
@@ -459,11 +457,9 @@ def train_ensemble_tree(
     tree_models = []
     for i in range(n_trees):
         np.random.seed(seed + i)
-        
+
         tree_model = train_tree(y, x, options, K, dmax, verbose=False)
         tree_models.append(tree_model)
-
-
 
     if verbose:
         print("Ensemble training completed.")
