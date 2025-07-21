@@ -69,7 +69,7 @@ class TreeModel:
                 return solver_type in ["0", "6", "7"]
         return False
 
-    def _get_scores(self, pred, parent_score=0.0):
+    def _get_scores(self, pred: np.ndarray, parent_score: float = 0.0) -> np.ndarray:
         if self._is_lr():
             return parent_score + log_expit(pred)
         else:
