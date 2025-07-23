@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 import libmultilabel.linear as linear
 from libmultilabel.common_utils import dump_log, is_multiclass_dataset
-from libmultilabel.linear.tree import train_ensemble_tree
+from libmultilabel.linear.tree import EnsembleTreeModel, TreeModel, train_ensemble_tree
 from libmultilabel.linear.utils import LINEAR_TECHNIQUES
 
 
@@ -22,7 +22,7 @@ def linear_test(config, model, datasets, label_mapping):
         scores = []
 
     predict_kwargs = {}
-    if model.name == "tree" or model.name == "ensemble-tree":
+    if isinstance(model, (TreeModel, EnsembleTreeModel)):
         predict_kwargs["beam_width"] = config.beam_width
 
     for i in tqdm(range(ceil(num_instance / config.eval_batch_size))):
