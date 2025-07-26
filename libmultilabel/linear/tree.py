@@ -4,7 +4,7 @@ from typing import Callable
 
 import numpy as np
 import scipy.sparse as sparse
-import sklearn.cluster
+from sparsekmeans import LloydKmeans, ElkanKmeans
 import sklearn.preprocessing
 from tqdm import tqdm
 import psutil
@@ -101,7 +101,7 @@ class TreeModel:
         self.subtree_models = []
         for i in range(len(self.root.children)):
             subtree_weights_start = self.node_ptr[self.root.children[i].index]
-            subtree_weights_end = self.node_ptr[self.root.children[i+1].index] if i+1 < len(self.root.children) else -1
+            subtree_weights_end = self.node_ptr[self.root.children[i+1].index] if i+1 < len(self.root.children) else self.node_ptr[-1]
             slice = np.s_[:, subtree_weights_start:subtree_weights_end]
             subtree_flatmodel = linear.FlatModel(
                 name="subtree-flattened-tree",
@@ -274,28 +274,29 @@ def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, 
     Returns:
         Node: Root of the (sub)tree built from label_representation.
     """
-    if d >= dmax or label_representation.shape[0] <= K:
-        return Node(label_map=label_map, children=[])
-
-    metalabels = (
-        sklearn.cluster.KMeans(
-            K,
-            random_state=np.random.randint(2**31 - 1),
-            n_init=1,
-            max_iter=300,
-            tol=0.0001,
-            algorithm="elkan",
-        )
-        .fit(label_representation)
-        .labels_
-    )
-
     children = []
-    for i in range(K):
-        child_representation = label_representation[metalabels == i]
-        child_map = label_map[metalabels == i]
-        child = _build_tree(child_representation, child_map, d + 1, K, dmax)
-        children.append(child)
+    if d < dmax and label_representation.shape[0] > K:
+        if label_representation.shape[0] > 10000:
+            kmeans_algo = ElkanKmeans
+        else:
+            kmeans_algo = LloydKmeans
+
+        kmeans = kmeans_algo(
+            n_clusters=K, max_iter=300, tol=0.0001, random_state=np.random.randint(2**31 - 1), verbose=True
+        )
+        metalabels = kmeans.fit(label_representation)
+
+        unique_labels = np.unique(metalabels)
+        if len(unique_labels) == K:
+            create_child_node = lambda i: _build_tree(
+                label_representation[metalabels == i], label_map[metalabels == i], d + 1, K, dmax
+            )
+        else:
+            create_child_node = lambda i: Node(label_map=label_map[metalabels == i], children=[])
+
+        for i in range(K):
+            child = create_child_node(i)
+            children.append(child)
 
     return Node(label_map=label_map, children=children)
 
