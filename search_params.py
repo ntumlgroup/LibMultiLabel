@@ -25,8 +25,8 @@ def train_libmultilabel_tune(config, datasets, classes, word_dict):
     Args:
         config (dict): Config of the experiment.
         datasets (dict): A dictionary of datasets.
-        classes(list): List of class names.
-        word_dict(torchtext.vocab.Vocab): A vocab object which maps tokens to indices.
+        classes (list): List of class names.
+        word_dict (dict): A dictionary for mapping tokens to indices.
     """
 
     # ray convert AttributeDict to dict

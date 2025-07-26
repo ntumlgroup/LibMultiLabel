@@ -19,7 +19,7 @@ class TorchTrainer:
         config (AttributeDict): Config of the experiment.
         datasets (dict, optional): Datasets for training, validation, and test. Defaults to None.
         classes(list, optional): List of class names.
-        word_dict(torchtext.vocab.Vocab, optional): A vocab object which maps tokens to indices.
+        word_dict (dict, optional): A dictionary for mapping tokens to indices. Defaults to None.
         embed_vecs (torch.Tensor, optional): The pre-trained word vectors of shape (vocab_size, embed_dim).
         save_checkpoints (bool, optional): Whether to save the last and the best checkpoint or not.
             Defaults to True.
@@ -136,7 +136,7 @@ class TorchTrainer:
 
         Args:
             classes(list): List of class names.
-            word_dict(torchtext.vocab.Vocab): A vocab object which maps tokens to indices.
+            word_dict (dict, optional): A dictionary for mapping tokens to indices. Defaults to None.
             embed_vecs (torch.Tensor): The pre-trained word vectors of shape (vocab_size, embed_dim).
             log_path (str): Path to the log file. The log file contains the validation
                 results for each epoch and the test results. If the `log_path` is None, no performance

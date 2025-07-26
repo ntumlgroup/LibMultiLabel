@@ -489,7 +489,7 @@ class PLTTrainer:
         # Convert words to numbers according to their indices in word_dict. Then pad each instance to a certain length.
         encoded_text = list(
             map(
-                lambda text: torch.tensor([self.word_dict[word] for word in text], dtype=torch.int64)
+                lambda text: torch.tensor([self.word_dict.get(word, self.word_dict[UNK]) for word in text], dtype=torch.int64)
                 if text
                 else torch.tensor([self.word_dict[UNK]], dtype=torch.int64),
                 [instance["text"][: self.max_seq_length] for instance in dataset],

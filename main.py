@@ -189,6 +189,7 @@ def add_all_arguments(parser):
     parser.add_argument(
         "--embed_cache_dir",
         type=str,
+        default=".vector_cache",
         help="For parameter search only: path to a directory for storing embeddings for multiple runs. (default: %(default)s)",
     )
     parser.add_argument(

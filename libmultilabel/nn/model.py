@@ -181,7 +181,7 @@ class Model(MultiLabelModel):
 
     Args:
         classes (list): List of class names.
-        word_dict (torchtext.vocab.Vocab): A vocab object which maps tokens to indices.
+        word_dict (dict): A dictionary for mapping tokens to indices.
         network (nn.Module): Network (i.e., CAML, KimCNN, or XMLCNN).
         loss_function (str, optional): Loss function name (i.e., binary_cross_entropy_with_logits,
             cross_entropy). Defaults to 'binary_cross_entropy_with_logits'.
