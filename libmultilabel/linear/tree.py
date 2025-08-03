@@ -13,6 +13,9 @@ from . import linear
 
 __all__ = ["train_tree", "TreeModel", "train_ensemble_tree", "EnsembleTreeModel"]
 
+K = 100
+DMAX = 10
+
 
 class Node:
     def __init__(
@@ -198,8 +201,6 @@ def train_tree(
     y: sparse.csr_matrix,
     x: sparse.csr_matrix,
     options: str = "",
-    K=100,
-    dmax=10,
     verbose: bool = True,
 ) -> TreeModel:
     """Train a linear model for multi-label data using a divide-and-conquer strategy.
@@ -209,8 +210,6 @@ def train_tree(
         y (sparse.csr_matrix): A 0/1 matrix with dimensions number of instances * number of classes.
         x (sparse.csr_matrix): A matrix with dimensions number of instances * number of features.
         options (str): The option string passed to liblinear.
-        K (int, optional): Maximum degree of nodes in the tree. Defaults to 100.
-        dmax (int, optional): Maximum depth of the tree. Defaults to 10.
         verbose (bool, optional): Output extra progress information. Defaults to True.
 
     Returns:
@@ -218,7 +217,7 @@ def train_tree(
     """
     label_representation = (y.T * x).tocsr()
     label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
-    root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
+    root = _build_tree(label_representation, np.arange(y.shape[1]), 0)
     root.is_root = True
 
     num_nodes = 0
@@ -261,20 +260,18 @@ def train_tree(
     return TreeModel(root, flat_model, node_ptr)
 
 
-def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, d: int, K: int, dmax: int) -> Node:
+def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, d: int) -> Node:
     """Build the tree recursively by kmeans clustering.
 
     Args:
         label_representation (sparse.csr_matrix): A matrix with dimensions number of classes under this node * number of features.
         label_map (np.ndarray): Maps 0..label_representation.shape[0] to the original label indices.
         d (int): Current depth.
-        K (int): Maximum degree of nodes in the tree.
-        dmax (int): Maximum depth of the tree.
 
     Returns:
         Node: Root of the (sub)tree built from label_representation.
     """
-    if d >= dmax or label_representation.shape[0] <= K:
+    if d >= DMAX or label_representation.shape[0] <= K:
         return Node(label_map=label_map, children=[])
 
     metalabels = (
@@ -294,7 +291,7 @@ def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, 
     for i in range(K):
         child_representation = label_representation[metalabels == i]
         child_map = label_map[metalabels == i]
-        child = _build_tree(child_representation, child_map, d + 1, K, dmax)
+        child = _build_tree(child_representation, child_map, d + 1)
         children.append(child)
 
     return Node(label_map=label_map, children=children)
@@ -416,8 +413,6 @@ def train_ensemble_tree(
     y: sparse.csr_matrix,
     x: sparse.csr_matrix,
     options: str = "",
-    K: int = 100,
-    dmax: int = 10,
     n_trees: int = 3,
     seed: int = 42,
     verbose: bool = True,
@@ -427,8 +422,6 @@ def train_ensemble_tree(
         y (sparse.csr_matrix): A 0/1 matrix with dimensions number of instances * number of classes.
         x (sparse.csr_matrix): A matrix with dimensions number of instances * number of features.
         options (str, optional): The option string passed to liblinear. Defaults to ''.
-        K (int, optional): Maximum degree of nodes in the tree. Defaults to 100.
-        dmax (int, optional): Maximum depth of the tree. Defaults to 10.
         n_trees (int, optional): Number of trees in the ensemble. Defaults to 3.
         seed (int, optional): The base random seed for the ensemble. Defaults to 42.
         verbose (bool, optional): Output extra progress information. Defaults to True.
@@ -440,7 +433,7 @@ def train_ensemble_tree(
     for i in range(n_trees):
         np.random.seed(seed + i)
 
-        tree_model = train_tree(y, x, options, K, dmax, verbose=False)
+        tree_model = train_tree(y, x, options, verbose=False)
         tree_models.append(tree_model)
 
     if verbose:

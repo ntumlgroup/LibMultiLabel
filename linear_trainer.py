@@ -48,14 +48,13 @@ def linear_train(datasets, config):
     if config.linear_technique == "tree":
         if multiclass:
             raise ValueError("Tree model should only be used with multilabel datasets.")
-
+        linear.tree.K = config.tree_degree
+        linear.tree.DMAX = config.tree_max_depth
         if config.tree_ensemble_models > 1:
             model = train_ensemble_tree(
                 datasets["train"]["y"],
                 datasets["train"]["x"],
                 options=config.liblinear_options,
-                K=config.tree_degree,
-                dmax=config.tree_max_depth,
                 n_trees=config.tree_ensemble_models,
                 seed=config.seed if config.seed is not None else 42,
             )
@@ -64,8 +63,6 @@ def linear_train(datasets, config):
                 datasets["train"]["y"],
                 datasets["train"]["x"],
                 options=config.liblinear_options,
-                K=config.tree_degree,
-                dmax=config.tree_max_depth,
             )
     else:
         model = LINEAR_TECHNIQUES[config.linear_technique](
