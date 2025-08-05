@@ -2,34 +2,37 @@
 Handling Data with Many Labels Using Linear Methods
 ====================================================
 
-For the case that the amount of labels is very large,
-the training time of the standard ``train_1vsrest`` method may be unpleasantly long.
-The ``train_tree`` method in LibMultiLabel can vastly improve the training time on such data sets.
+For datasets with a very large number of labels, the training time of the standard ``train_1vsrest`` method can be prohibitively long. LibMultiLabel offers tree-based methods like ``train_tree`` and ``train_ensemble_tree`` to vastly improve training time in such scenarios.
 
-To illustrate this speedup, we will use the `EUR-Lex dataset <https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/multilabel.html#EUR-Lex>`_, which contains 3,956 labels.
-The data in the following example is downloaded under the directory ``data/eur-lex``
 
-Users can use the following command to easily apply the ``train_tree`` method.
-
-.. code-block:: bash
-
-    $ python3 main.py --training_file data/eur-lex/train.txt
-                      --test_file data/eur-lex/test.txt
-                      --linear
-                      --linear_technique tree
-
-Besides CLI usage, users can also use API to apply ``train_tree`` method.
-Below is an example.
+We will use the `EUR-Lex dataset <https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/multilabel.html#EUR-Lex>`_, which contains 3,956 labels. The data is assumed to be downloaded under the directory ``data/eur-lex``.
 """
 
 import math
 import libmultilabel.linear as linear
 import time
 
+# Load and preprocess the dataset
 datasets = linear.load_dataset("txt", "data/eurlex/train.txt", "data/eurlex/test.txt")
 preprocessor = linear.Preprocessor()
 datasets = preprocessor.fit_transform(datasets)
 
+
+######################################################################
+# Standard Training and Prediction
+# --------------------------------
+#
+# Users can use the following command to easily apply the ``train_tree`` method.
+#
+# .. code-block:: bash
+#
+#     $ python3 main.py --training_file data/eur-lex/train.txt \\
+#                       --test_file data/eur-lex/test.txt \\
+#                       --linear \\
+#                       --linear_technique tree
+#
+# Besides CLI usage, users can also use API to apply ``train_tree`` method.
+# Below is an example.
 
 training_start = time.time()
 # the standard one-vs-rest method for multi-label problems
@@ -98,4 +101,82 @@ def metrics_in_batches(model):
 
 print("Score of 1vsrest:", metrics_in_batches(ovr_model))
 print("Score of tree:", metrics_in_batches(tree_model))
+
+
+######################################################################
+# Ensemble of Tree Models
+# -----------------------
+#
+# While the ``train_tree`` method offers a significant speedup, its accuracy can sometimes be slightly lower than the standard one-vs-rest approach.
+# The ``train_ensemble_tree`` method can help bridge this gap by training multiple tree models and averaging their predictions.
+#
+# Users can use the following command to easily apply the ``train_ensemble_tree`` method.
+# The number of trees in the ensemble can be controlled with the ``--tree_ensemble_models`` argument.
+#
+# .. code-block:: bash
+#
+#     $ python3 main.py --training_file data/eur-lex/train.txt \\
+#                       --test_file data/eur-lex/test.txt \\
+#                       --linear \\
+#                       --linear_technique tree \\
+#                       --tree_ensemble_models 3
+#
+# This command trains an ensemble of 3 tree models. If ``--tree_ensemble_models`` is not specified, it defaults to 1 (a single tree).
+#
+# Besides CLI usage, users can also use the API to apply the ``train_ensemble_tree`` method.
+# Below is an example.
+
+# We have already trained a single tree model as a baseline.
+# Now, let's train an ensemble of 3 tree models.
+training_start = time.time()
+ensemble_model = linear.train_ensemble_tree(
+    datasets["train"]["y"], datasets["train"]["x"], n_trees=3
+)
+training_end = time.time()
+print("Training time of ensemble tree: {:10.2f}".format(training_end - training_start))
+
+######################################################################
+# On a machine with an AMD-7950X CPU,
+# the ``train_ensemble_tree`` function with 3 trees took `421.15` seconds,
+# while the single tree took `144.37` seconds.
+# As expected, training an ensemble takes longer, roughly proportional to the number of trees.
+#
+# Now, let's see if this additional training time translates to better performance.
+# We'll compute the same P@K metrics on the test set for both the single tree and the ensemble model.
+
+# `tree_preds` and `target` are already computed in the previous section.
+ensemble_preds = linear.predict_values(ensemble_model, datasets["test"]["x"])
+
+# `tree_score` is already computed.
+print("Score of single tree:", tree_score)
+
+ensemble_score = linear.compute_metrics(ensemble_preds, target, ["P@1", "P@3", "P@5"])
+print("Score of ensemble tree:", ensemble_score)
+
+######################################################################
+# While training an ensemble takes longer, it often leads to better predictive performance.
+# The following table shows a comparison between a single tree and ensembles
+# of 3, 10, and 15 trees on several benchmark datasets.
+#
+# .. table:: Benchmark Results for Single and Ensemble Tree Models (P@K in %)
+#
+#    +---------------+-----------------+-------+-------+-------+
+#    | Dataset       | Model           | P@1   | P@3   | P@5   |
+#    +===============+=================+=======+=======+=======+
+#    | EURLex-4k     | Single Tree     | 82.35 | 68.98 | 57.62 |
+#    |               +-----------------+-------+-------+-------+
+#    |               | Ensemble-3      | 82.38 | 69.28 | 58.01 |
+#    |               +-----------------+-------+-------+-------+
+#    |               | Ensemble-10     | 82.74 | 69.66 | 58.39 |
+#    |               +-----------------+-------+-------+-------+
+#    |               | Ensemble-15     | 82.61 | 69.56 | 58.29 |
+#    +---------------+-----------------+-------+-------+-------+
+#    | EURLex-57k    | Single Tree     | 90.77 | 80.81 | 67.82 |
+#    |               +-----------------+-------+-------+-------+
+#    |               | Ensemble-3      | 91.02 | 81.06 | 68.26 |
+#    |               +-----------------+-------+-------+-------+
+#    |               | Ensemble-10     | 91.23 | 81.22 | 68.34 |
+#    |               +-----------------+-------+-------+-------+
+#    |               | Ensemble-15     | 91.25 | 81.31 | 68.34 |
+#    +---------------+-----------------+-------+-------+-------+
 
