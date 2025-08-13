@@ -11,6 +11,7 @@ from tqdm import tqdm
 import psutil
 
 from . import linear
+from . import metrics
 
 __all__ = ["train_tree", "TreeModel"]
 
@@ -64,7 +65,6 @@ class TreeModel:
         self,
         x: sparse.csr_matrix,
         beam_width: int = 10,
-        estimation_parameter: int = 3,
     ) -> np.ndarray:
         """Calculate the probability estimates associated with x.
 
@@ -76,8 +76,6 @@ class TreeModel:
         Returns:
             np.ndarray: A matrix with dimension number of instances * number of classes.
         """
-
-        self.estimator_parameter = estimation_parameter
 
         if beam_width >= len(self.root.children):
             # Beam_width is sufficiently large; pruning not applied.
@@ -203,6 +201,55 @@ class TreeModel:
             scores[node.label_map] = np.exp(score + self.sigmoid_A(pred))
         return scores
 
+    def tuning_A_by_cross_validation(
+            self,
+            y: sparse.csr_matrix,
+            x: sparse.csr_matrix, 
+            n_folds: int,
+            batch_size: int,
+            beamwidth: int,
+            metric: list,
+            A_candidates: list,
+            options: str = "",
+            K=100,
+            dmax=10,
+    ):
+        data_splits = []
+        for n in range(n_folds):
+            start = np.ceil(n/n_folds*x.shape[0]).astype(int)
+            end = np.ceil((n+1)/n_folds*x.shape[0]).astype(int)
+            data_splits.append({'x':x[start:end, :], 'y':y[start:end ,:]})
+        
+        score = {m:{A:0 for A in A_candidates} for m in metric}        
+        for n in range(n_folds):
+            data_y = sparse.vstack([data_splits[j]["y"] for j in range(n_folds) if j != n])
+            data_x = sparse.vstack([data_splits[j]["x"] for j in range(n_folds) if j != n])
+
+            model = train_tree(
+                data_y,
+                data_x,
+                options,
+                K,
+                dmax,
+            )
+
+            for A in A_candidates:
+                model.estimator_parameter = A
+                
+                num_instances = data_splits[n]["x"].shape[0]
+                num_batch = np.ceil(num_instances/batch_size).astype(int)
+                metric_eval = metrics.get_metrics(metric ,num_classes = data_y.shape[1])
+                for i in range(num_batch):
+                    valid_x = data_splits[n]["x"][i * batch_size : (i+1) * batch_size]
+                    valid_y = data_splits[n]["y"][i * batch_size : (i+1) * batch_size]
+                    preds = model.predict_values(valid_x, beam_width=beamwidth)
+                    metric_eval.update(preds, valid_y)
+
+                eval = metric_eval.compute()
+                for k in eval.keys():
+                    score[k][A] += eval[k]
+                        
+                    self.estimator_parameter = max(score[k], key=score[k].get)
 
 def train_tree(
     y: sparse.csr_matrix,
