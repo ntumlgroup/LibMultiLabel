@@ -141,7 +141,7 @@ def add_all_arguments(parser):
     # pretrained vocab / embeddings
     parser.add_argument("--vocab_file", type=str, help="Path to a file holding vocabuaries (default: %(default)s)")
     parser.add_argument(
-        "--embed_file", type=str, help="Path to a file holding pre-trained embeddings (default: %(default)s)"
+        "--embed_file", type=str, help="Path to a file holding pre-trained embeddings or the name of the pretrained GloVe embedding (default: %(default)s)"
     )
     parser.add_argument("--label_file", type=str, help="Path to a file holding all labels (default: %(default)s)")
 

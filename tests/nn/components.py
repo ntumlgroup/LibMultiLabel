@@ -20,7 +20,7 @@ class token_to_id(object):
         return "token_to_id"
 
     def get_from_trainer(self, trainer):
-        return trainer.model.word_dict.get_stoi()
+        return trainer.model.word_dict
 
     def compare(self, a, b):
         return a == b

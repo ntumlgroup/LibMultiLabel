@@ -27,7 +27,7 @@ class FlatModel:
     def __init__(
         self,
         name: str,
-        weights: np.matrix,
+        weights: np.matrix | sparse.csr_matrix,
         bias: float,
         thresholds: float | np.ndarray,
         multiclass: bool,
@@ -69,7 +69,21 @@ class FlatModel:
                 "csr",
             )
 
-        return (x * self.weights).A + self.thresholds
+        return self._to_dense_array(x * self.weights) + self.thresholds
+
+    def _to_dense_array(self, matrix: np.matrix | sparse.csr_matrix) -> np.ndarray:
+        """Convert a numpy or scipy matrix to a dense ndarray.
+
+        Args:
+            matrix (np.matrix | sparse.csr_matrix): A numpy or scipy sparse matrix.
+
+        Returns:
+            np.ndarray: A dense ndarray of `matrix`.
+        """
+        if sparse.issparse(matrix):
+            return matrix.toarray()
+        elif isinstance(matrix, np.matrix):
+            return np.asarray(matrix)
 
 
 def train_1vsrest(
@@ -458,7 +472,7 @@ def _cost_sensitive_one_label(y: np.ndarray, x: sparse.csr_matrix, options: str)
 
     param_space = [1, 1.33, 1.8, 2.5, 3.67, 6, 13]
 
-    bestScore = -np.Inf
+    bestScore = -np.inf
     for a in param_space:
         cv_options = f"{options} -w1 {a}"
         pred = _cross_validate(y, x, cv_options, perm)
@@ -532,7 +546,7 @@ def train_cost_sensitive_micro(
     l = y.shape[0]
     perm = np.random.permutation(l)
     param_space = [1, 1.33, 1.8, 2.5, 3.67, 6, 13]
-    bestScore = -np.Inf
+    bestScore = -np.inf
 
     if verbose:
         logging.info(f"Training cost-sensitive model for Micro-F1 on {num_class} labels")

@@ -77,7 +77,7 @@ If a model was trained before by this package, the training procedure can start 
 
 To use your own word embeddings or vocabulary set, specify the following parameters:
 
-- **embed_file**: choose one of the pretrained embeddings defined in `torchtext <https://pytorch.org/text/0.9.0/vocab.html#torchtext.vocab.Vocab.load_vectors>`_ or specify the path to your word embeddings with each line containing a word followed by its vectors. Example:
+- **embed_file**: choose one of the pretrained embeddings: `glove.6B.50d`, `glove.6B.100d`, `glove.6B.200d`, `glove.6B.300d`, `glove.42B.300d`, `glove.840B.300d`, or specify the path to your word embeddings with each line containing a word followed by its vectors. Example:
 
 .. code-block::
 
@@ -133,7 +133,8 @@ To deploy/evaluate a model (i.e., a pre-obtained checkpoint), you can predict a 
 Hyper-parameter Search
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Parameter selection is known to be extremely important in machine learning practice; see a powerful reminder in "`this paper <https://www.csie.ntu.edu.tw/~cjlin/papers/parameter_selection/acl2021_parameter_selection.pdf>`_". Here we leverage `Ray Tune <https://docs.ray.io/en/master/tune/index.html>`__, which is a python library for hyper-parameter tuning, to select parameters. Due to the dependency of Ray Tune, first make sure your python version is not greater than 3.8. Then, install the related packages with::
+Parameter selection is known to be extremely important in machine learning practice; see a powerful reminder in "`this paper <https://www.csie.ntu.edu.tw/~cjlin/papers/parameter_selection/acl2021_parameter_selection.pdf>`_". 
+Here we leverage `Ray Tune <https://docs.ray.io/en/master/tune/index.html>`__, which is a python library for hyper-parameter tuning, to select parameters. Install the related packages with::
 
     pip3 install -Ur requirements_parameter_search.txt
 
