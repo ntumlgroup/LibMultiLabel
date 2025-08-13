@@ -422,8 +422,8 @@ def train_ensemble_tree(
     K: int = DEFAULT_K,
     dmax: int = DEFAULT_DMAX,
     n_trees: int = 3,
-    seed: int = 42,
     verbose: bool = True,
+    seed: int = None,
 ) -> EnsembleTreeModel:
     """Trains an ensemble of tree models (Parabel/Bonsai-style).
     Args:
@@ -433,12 +433,15 @@ def train_ensemble_tree(
         K (int, optional): Maximum degree of nodes in the tree. Defaults to 100.
         dmax (int, optional): Maximum depth of the tree. Defaults to 10.
         n_trees (int, optional): Number of trees in the ensemble. Defaults to 3.
-        seed (int, optional): The base random seed for the ensemble. Defaults to 42.
         verbose (bool, optional): Output extra progress information. Defaults to True.
+        seed (int, optional): The base random seed for the ensemble. Defaults to None, which will use 42.
 
     Returns:
         EnsembleTreeModel: An ensemble model which can be used for prediction.
     """
+    if seed is None:
+        seed = 42
+        
     tree_models = []
     for i in range(n_trees):
         np.random.seed(seed + i)

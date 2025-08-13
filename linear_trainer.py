@@ -57,7 +57,7 @@ def linear_train(datasets, config):
                 K=config.tree_degree,
                 dmax=config.tree_max_depth,
                 n_trees=config.tree_ensemble_models,
-                seed=config.seed if config.seed is not None else 42,
+                seed=config.seed,
             )
         else:
             model = LINEAR_TECHNIQUES[config.linear_technique](
