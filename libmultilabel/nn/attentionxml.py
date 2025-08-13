@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import pickle
 from functools import partial
 from pathlib import Path
 from typing import Generator, Sequence, Optional
@@ -261,7 +262,6 @@ class PLTTrainer:
                 model_name="AttentionXML_0",
                 network_config=self.network_config,
                 classes=clusters,
-                word_dict=self.word_dict,
                 embed_vecs=self.embed_vecs,
                 init_weight=self.init_weight,
                 log_path=self.log_path,
@@ -380,7 +380,6 @@ class PLTTrainer:
 
         model_1 = PLTModel(
             classes=self.classes,
-            word_dict=self.word_dict,
             network=network,
             log_path=self.log_path,
             learning_rate=self.learning_rate,
@@ -427,7 +426,13 @@ class PLTTrainer:
             save_k_predictions=self.save_k_predictions,
             metrics=self.metrics,
         )
-        self.word_dict = model_1.word_dict
+        # self.word_dict = model_1.word_dict
+        # TBD: similar to the one in torch_trainer
+        import os
+        metadata_path = os.path.join(os.path.dirname(self.get_best_model_path(level=1)), "word_dict.pkl")
+        if os.path.exists(metadata_path):
+            with open(metadata_path, "rb") as f:
+                self.word_dict = pickle.load(f)
         classes = model_1.classes
 
         test_x = self.reformat_text(dataset)
@@ -519,7 +524,6 @@ class PLTModel(Model):
     def __init__(
         self,
         classes,
-        word_dict,
         network,
         loss_function="binary_cross_entropy_with_logits",
         log_path=None,
@@ -527,7 +531,7 @@ class PLTModel(Model):
     ):
         super().__init__(
             classes=classes,
-            word_dict=word_dict,
+            # word_dict=word_dict,
             network=network,
             loss_function=loss_function,
             log_path=log_path,
