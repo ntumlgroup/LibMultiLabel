@@ -75,8 +75,6 @@ class TorchTrainer:
         self._setup_model(
             # TBD: check why we need this setting?
             datasets=self.datasets["train"] + self.datasets["val"] if self.config.is_attentionxml else self.datasets["train"],
-            classes=classes,
-            embed_vecs=embed_vecs,
             log_path=self.log_path,
             checkpoint_path=config.checkpoint_path,
         )
@@ -103,8 +101,6 @@ class TorchTrainer:
     def _setup_model(
         self,
         datasets: dict = None,
-        classes: list = None,
-        embed_vecs=None,
         log_path: str = None,
         checkpoint_path: str = None,
     ):
@@ -113,8 +109,6 @@ class TorchTrainer:
 
         Args:
             datasets (dict, optional): Datasets for training, validation, and test. Defaults to None.
-            classes(list): List of class names.
-            embed_vecs (torch.Tensor): The pre-trained word vectors of shape (vocab_size, embed_dim).
             log_path (str): Path to the log file. The log file contains the validation
                 results for each epoch and the test results. If the `log_path` is None, no performance
                 results will be logged.
@@ -147,7 +141,7 @@ class TorchTrainer:
                 with open(self.metadata_path, "wb") as f:
                     pickle.dump(self.word_dict, f)
 
-            if not classes:
+            if not self.classes:
                 self.classes = data_utils.load_or_build_label(
                     self.datasets, self.config.label_file, self.config.include_test_labels
                 )
@@ -171,8 +165,8 @@ class TorchTrainer:
                 self.model = init_model(
                     model_name=self.config.model_name,
                     network_config=dict(self.config.network_config),
-                    classes=classes,
-                    embed_vecs=embed_vecs,
+                    classes=self.classes,
+                    embed_vecs=self.embed_vecs,
                     init_weight=self.config.init_weight,
                     log_path=log_path,
                     learning_rate=self.config.learning_rate,
