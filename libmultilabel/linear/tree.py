@@ -11,7 +11,10 @@ import psutil
 
 from . import linear
 
-__all__ = ["train_tree", "TreeModel"]
+__all__ = ["train_tree", "TreeModel", "train_ensemble_tree", "EnsembleTreeModel"]
+
+DEFAULT_K = 100
+DEFAULT_DMAX = 10
 
 
 class Node:
@@ -198,8 +201,8 @@ def train_tree(
     y: sparse.csr_matrix,
     x: sparse.csr_matrix,
     options: str = "",
-    K=100,
-    dmax=10,
+    K=DEFAULT_K,
+    dmax=DEFAULT_DMAX,
     verbose: bool = True,
 ) -> TreeModel:
     """Train a linear model for multi-label data using a divide-and-conquer strategy.
@@ -383,3 +386,70 @@ def _flatten_model(root: Node) -> tuple[linear.FlatModel, np.ndarray]:
     node_ptr = np.cumsum([0] + list(map(lambda w: w.shape[1], weights)))
 
     return model, node_ptr
+
+
+class EnsembleTreeModel:
+    """An ensemble of tree models.
+    The ensemble aggregates predictions from multiple trees to improve accuracy and robustness.
+    """
+
+    def __init__(self, tree_models: list[TreeModel]):
+        """
+        Args:
+            tree_models (list[TreeModel]): A list of trained tree models.
+        """
+        self.name = "ensemble-tree"
+        self.tree_models = tree_models
+        self.multiclass = False
+
+    def predict_values(self, x: sparse.csr_matrix, beam_width: int = 10) -> np.ndarray:
+        """Calculates the averaged probability estimates from all trees in the ensemble.
+
+        Args:
+            x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
+            beam_width (int, optional): Number of candidates considered during beam search for each tree. Defaults to 10.
+
+        Returns:
+            np.ndarray: A matrix with dimension number of instances * number of classes, containing averaged scores.
+        """
+        all_predictions = [model.predict_values(x, beam_width) for model in self.tree_models]
+        return np.mean(all_predictions, axis=0)
+
+
+def train_ensemble_tree(
+    y: sparse.csr_matrix,
+    x: sparse.csr_matrix,
+    options: str = "",
+    K: int = DEFAULT_K,
+    dmax: int = DEFAULT_DMAX,
+    n_trees: int = 3,
+    verbose: bool = True,
+    seed: int = None,
+) -> EnsembleTreeModel:
+    """Trains an ensemble of tree models (Parabel/Bonsai-style).
+    Args:
+        y (sparse.csr_matrix): A 0/1 matrix with dimensions number of instances * number of classes.
+        x (sparse.csr_matrix): A matrix with dimensions number of instances * number of features.
+        options (str, optional): The option string passed to liblinear. Defaults to ''.
+        K (int, optional): Maximum degree of nodes in the tree. Defaults to 100.
+        dmax (int, optional): Maximum depth of the tree. Defaults to 10.
+        n_trees (int, optional): Number of trees in the ensemble. Defaults to 3.
+        verbose (bool, optional): Output extra progress information. Defaults to True.
+        seed (int, optional): The base random seed for the ensemble. Defaults to None, which will use 42.
+
+    Returns:
+        EnsembleTreeModel: An ensemble model which can be used for prediction.
+    """
+    if seed is None:
+        seed = 42
+        
+    tree_models = []
+    for i in range(n_trees):
+        np.random.seed(seed + i)
+
+        tree_model = train_tree(y, x, options, K, dmax, verbose)
+        tree_models.append(tree_model)
+
+    print("Ensemble training completed.")
+
+    return EnsembleTreeModel(tree_models)
