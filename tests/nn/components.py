@@ -20,7 +20,7 @@ class token_to_id(object):
         return "token_to_id"
 
     def get_from_trainer(self, trainer):
-        return trainer.model.word_dict
+        return trainer.word_dict
 
     def compare(self, a, b):
         return a == b
@@ -34,7 +34,7 @@ class embed_vecs(object):
         return "embed_vecs"
 
     def get_from_trainer(self, trainer):
-        return trainer.model.embed_vecs
+        return trainer.embed_vecs
 
     def compare(self, a, b):
         return (a == b).all()
