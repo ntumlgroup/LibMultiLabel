@@ -25,6 +25,7 @@ class TorchTrainer:
         save_checkpoints (bool, optional): Whether to save the last and the best checkpoint or not.
             Defaults to True.
     """
+    WORD_DICT_NAME = "word_dict.pickle"
 
     def __init__(
         self,
@@ -39,14 +40,13 @@ class TorchTrainer:
         self.checkpoint_dir = config.checkpoint_dir
         self.log_path = config.log_path
         os.makedirs(self.checkpoint_dir, exist_ok=True)
-        self.metadata_path = os.path.join(config.checkpoint_dir, "word_dict.pkl") # TBD
 
         # Set up seed & device
         set_seed(seed=config.seed)
         self.device = init_device(use_cpu=config.cpu)
         self.config = config
 
-        # Set up meta data
+        # Set dataset meta info
         self.embed_vecs = embed_vecs
         self.word_dict = word_dict
         self.classes = classes
@@ -71,36 +71,65 @@ class TorchTrainer:
             self.datasets = datasets
 
         self.config.multiclass = is_multiclass_dataset(self.datasets["train"] + self.datasets.get("val", list()))
-        self.config.is_attentionxml = self.config.model_name.lower() == "attentionxml"
-        self._setup_model(
-            # TBD: check why we need this setting?
-            datasets=self.datasets["train"] + self.datasets["val"] if self.config.is_attentionxml else self.datasets["train"],
-            log_path=self.log_path,
-            checkpoint_path=config.checkpoint_path,
-        )
 
-        if self.config.is_attentionxml:
-            self.trainer =  PLTTrainer(self.config, classes=self.classes, embed_vecs=self.embed_vecs, word_dict=self.word_dict)
-        else:
-            self.trainer = init_trainer(
-                checkpoint_dir=self.checkpoint_dir,
-                epochs=config.epochs,
-                patience=config.patience,
-                early_stopping_metric=config.early_stopping_metric,
-                val_metric=config.val_metric,
-                silent=config.silent,
-                use_cpu=config.cpu,
-                limit_train_batches=config.limit_train_batches,
-                limit_val_batches=config.limit_val_batches,
-                limit_test_batches=config.limit_test_batches,
-                save_checkpoints=save_checkpoints,
-            )
-            callbacks = [callback for callback in self.trainer.callbacks if isinstance(callback, ModelCheckpoint)]
-            self.checkpoint_callback = callbacks[0] if callbacks else None
+        if self.config.model_name.lower() == "attentionxml":
+            # Note that AttentionXML produces two models. checkpoint_path directs to model_1
+            if config.checkpoint_path is None:
+                if self.config.embed_file is not None:
+                    word_dict_path = os.path.join(self.checkpoint_dir, self.WORD_DICT_NAME)
+                    logging.info(f"Load and cache the word dictionary into {word_dict_path}.")
+                    self.word_dict, self.embed_vecs = data_utils.load_or_build_text_dict(
+                        dataset=self.datasets["train"] + self.datasets["val"],
+                        vocab_file=config.vocab_file,
+                        min_vocab_freq=config.min_vocab_freq,
+                        embed_file=config.embed_file,
+                        silent=config.silent,
+                        normalize_embed=config.normalize_embed,
+                        embed_cache_dir=config.embed_cache_dir,
+                    )
+                    with open(word_dict_path, "wb") as f:                    
+                        pickle.dump(self.word_dict, f)
+
+                if not self.classes:
+                    self.classes = data_utils.load_or_build_label(
+                        self.datasets, self.config.label_file, self.config.include_test_labels
+                    )
+
+                if self.config.early_stopping_metric not in self.config.monitor_metrics:
+                    logging.warning(
+                        f"{self.config.early_stopping_metric} is not in `monitor_metrics`. "
+                        f"Add {self.config.early_stopping_metric} to `monitor_metrics`."
+                    )
+                    self.config.monitor_metrics += [self.config.early_stopping_metric]
+
+                if self.config.val_metric not in self.config.monitor_metrics:
+                    logging.warn(
+                        f"{self.config.val_metric} is not in `monitor_metrics`. "
+                        f"Add {self.config.val_metric} to `monitor_metrics`."
+                    )
+                    self.config.monitor_metrics += [self.config.val_metric]
+            self.trainer = PLTTrainer(self.config, classes=self.classes, embed_vecs=self.embed_vecs, word_dict=self.word_dict)
+            return
+        
+        self._setup_model(log_path=self.log_path, checkpoint_path=config.checkpoint_path)
+        self.trainer = init_trainer(
+            checkpoint_dir=self.checkpoint_dir,
+            epochs=config.epochs,
+            patience=config.patience,
+            early_stopping_metric=config.early_stopping_metric,
+            val_metric=config.val_metric,
+            silent=config.silent,
+            use_cpu=config.cpu,
+            limit_train_batches=config.limit_train_batches,
+            limit_val_batches=config.limit_val_batches,
+            limit_test_batches=config.limit_test_batches,
+            save_checkpoints=save_checkpoints,
+        )
+        callbacks = [callback for callback in self.trainer.callbacks if isinstance(callback, ModelCheckpoint)]
+        self.checkpoint_callback = callbacks[0] if callbacks else None
 
     def _setup_model(
         self,
-        datasets: dict = None,
         log_path: str = None,
         checkpoint_path: str = None,
     ):
@@ -108,7 +137,6 @@ class TorchTrainer:
         Otherwise, initialize model from scratch.
 
         Args:
-            datasets (dict, optional): Datasets for training, validation, and test. Defaults to None.
             log_path (str): Path to the log file. The log file contains the validation
                 results for each epoch and the test results. If the `log_path` is None, no performance
                 results will be logged.
@@ -116,21 +144,21 @@ class TorchTrainer:
         """
         if "checkpoint_path" in self.config and self.config.checkpoint_path is not None:
             checkpoint_path = self.config.checkpoint_path
-
+        
         if checkpoint_path is not None:
             logging.info(f"Loading model from `{checkpoint_path}` with the previously saved hyper-parameter...")
             self.model = Model.load_from_checkpoint(checkpoint_path, log_path=log_path)
-            # TBD: pseudo code 
-            metadata_path = os.path.join(os.path.dirname(checkpoint_path), "word_dict.pkl")
-            if os.path.exists(metadata_path):
-                with open(metadata_path, "rb") as f:
+            word_dict_path = os.path.join(os.path.dirname(checkpoint_path), self.WORD_DICT_NAME)
+            if os.path.exists(word_dict_path):
+                with open(word_dict_path, "rb") as f:
                     self.word_dict = pickle.load(f)
         else:
             logging.info("Initialize model from scratch.")
             if self.config.embed_file is not None:
-                logging.info(f"Load and cache the word dictionary into {self.metadata_path}")
+                word_dict_path = os.path.join(self.checkpoint_dir, self.WORD_DICT_NAME)
+                logging.info(f"Load and cache the word dictionary into {word_dict_path}.")
                 self.word_dict, self.embed_vecs = data_utils.load_or_build_text_dict(
-                    dataset=datasets,
+                    dataset=self.datasets["train"],
                     vocab_file=self.config.vocab_file,
                     min_vocab_freq=self.config.min_vocab_freq,
                     embed_file=self.config.embed_file,
@@ -138,7 +166,7 @@ class TorchTrainer:
                     normalize_embed=self.config.normalize_embed,
                     embed_cache_dir=self.config.embed_cache_dir,
                 )
-                with open(self.metadata_path, "wb") as f:
+                with open(word_dict_path, "wb") as f:
                     pickle.dump(self.word_dict, f)
 
             if not self.classes:
@@ -160,29 +188,27 @@ class TorchTrainer:
                 )
                 self.config.monitor_metrics += [self.config.val_metric]
 
-            # TBD: not for attention xml
-            if not self.config.is_attentionxml:
-                self.model = init_model(
-                    model_name=self.config.model_name,
-                    network_config=dict(self.config.network_config),
-                    classes=self.classes,
-                    embed_vecs=self.embed_vecs,
-                    init_weight=self.config.init_weight,
-                    log_path=log_path,
-                    learning_rate=self.config.learning_rate,
-                    optimizer=self.config.optimizer,
-                    momentum=self.config.momentum,
-                    weight_decay=self.config.weight_decay,
-                    lr_scheduler=self.config.lr_scheduler,
-                    scheduler_config=self.config.scheduler_config,
-                    val_metric=self.config.val_metric,
-                    metric_threshold=self.config.metric_threshold,
-                    monitor_metrics=self.config.monitor_metrics,
-                    multiclass=self.config.multiclass,
-                    loss_function=self.config.loss_function,
-                    silent=self.config.silent,
-                    save_k_predictions=self.config.save_k_predictions,
-                )
+            self.model = init_model(
+                model_name=self.config.model_name,
+                network_config=dict(self.config.network_config),
+                classes=self.classes,
+                embed_vecs=self.embed_vecs,
+                init_weight=self.config.init_weight,
+                log_path=log_path,
+                learning_rate=self.config.learning_rate,
+                optimizer=self.config.optimizer,
+                momentum=self.config.momentum,
+                weight_decay=self.config.weight_decay,
+                lr_scheduler=self.config.lr_scheduler,
+                scheduler_config=self.config.scheduler_config,
+                val_metric=self.config.val_metric,
+                metric_threshold=self.config.metric_threshold,
+                monitor_metrics=self.config.monitor_metrics,
+                multiclass=self.config.multiclass,
+                loss_function=self.config.loss_function,
+                silent=self.config.silent,
+                save_k_predictions=self.config.save_k_predictions,
+            )
 
     def _get_dataset_loader(self, split, shuffle=False):
         """Get dataset loader.

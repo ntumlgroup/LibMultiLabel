@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import pickle
 from functools import partial
 from pathlib import Path
@@ -34,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 class PLTTrainer:
     CHECKPOINT_NAME = "model_"
+    WORD_DICT_NAME = "word_dict.pickle"
 
     def __init__(
         self,
@@ -426,12 +428,10 @@ class PLTTrainer:
             save_k_predictions=self.save_k_predictions,
             metrics=self.metrics,
         )
-        # self.word_dict = model_1.word_dict
-        # TBD: similar to the one in torch_trainer
-        import os
-        metadata_path = os.path.join(os.path.dirname(self.get_best_model_path(level=1)), "word_dict.pkl")
-        if os.path.exists(metadata_path):
-            with open(metadata_path, "rb") as f:
+        
+        word_dict_path = os.path.join(os.path.dirname(self.get_best_model_path(level=1)), self.WORD_DICT_NAME)
+        if os.path.exists(word_dict_path):
+            with open(word_dict_path, "rb") as f:
                 self.word_dict = pickle.load(f)
         classes = model_1.classes
 
@@ -531,7 +531,6 @@ class PLTModel(Model):
     ):
         super().__init__(
             classes=classes,
-            # word_dict=word_dict,
             network=network,
             loss_function=loss_function,
             log_path=log_path,
