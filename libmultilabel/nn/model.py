@@ -187,14 +187,7 @@ class Model(MultiLabelModel):
         log_path (str): Path to a directory holding the log files and models.
     """
 
-    def __init__(
-        self,
-        classes,
-        network,
-        loss_function="binary_cross_entropy_with_logits",
-        log_path=None,
-        **kwargs
-    ):
+    def __init__(self, classes, network, loss_function="binary_cross_entropy_with_logits", log_path=None, **kwargs):
         super().__init__(num_classes=len(classes), log_path=log_path, **kwargs)
         self.save_hyperparameters(
             ignore=["log_path"]

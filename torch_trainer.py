@@ -25,6 +25,7 @@ class TorchTrainer:
         save_checkpoints (bool, optional): Whether to save the last and the best checkpoint or not.
             Defaults to True.
     """
+
     WORD_DICT_NAME = "word_dict.pickle"
 
     def __init__(
@@ -87,7 +88,7 @@ class TorchTrainer:
                         normalize_embed=config.normalize_embed,
                         embed_cache_dir=config.embed_cache_dir,
                     )
-                    with open(word_dict_path, "wb") as f:                    
+                    with open(word_dict_path, "wb") as f:
                         pickle.dump(self.word_dict, f)
 
                 if not self.classes:
@@ -108,9 +109,11 @@ class TorchTrainer:
                         f"Add {self.config.val_metric} to `monitor_metrics`."
                     )
                     self.config.monitor_metrics += [self.config.val_metric]
-            self.trainer = PLTTrainer(self.config, classes=self.classes, embed_vecs=self.embed_vecs, word_dict=self.word_dict)
+            self.trainer = PLTTrainer(
+                self.config, classes=self.classes, embed_vecs=self.embed_vecs, word_dict=self.word_dict
+            )
             return
-        
+
         self._setup_model(log_path=self.log_path, checkpoint_path=config.checkpoint_path)
         self.trainer = init_trainer(
             checkpoint_dir=self.checkpoint_dir,
@@ -144,7 +147,7 @@ class TorchTrainer:
         """
         if "checkpoint_path" in self.config and self.config.checkpoint_path is not None:
             checkpoint_path = self.config.checkpoint_path
-        
+
         if checkpoint_path is not None:
             logging.info(f"Loading model from `{checkpoint_path}` with the previously saved hyper-parameter...")
             self.model = Model.load_from_checkpoint(checkpoint_path, log_path=log_path)
