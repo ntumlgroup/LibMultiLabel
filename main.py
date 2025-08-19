@@ -141,7 +141,7 @@ def add_all_arguments(parser):
     # pretrained vocab / embeddings
     parser.add_argument("--vocab_file", type=str, help="Path to a file holding vocabuaries (default: %(default)s)")
     parser.add_argument(
-        "--embed_file", type=str, help="Path to a file holding pre-trained embeddings (default: %(default)s)"
+        "--embed_file", type=str, help="Path to a file holding pre-trained embeddings or the name of the pretrained GloVe embedding (default: %(default)s)"
     )
     parser.add_argument("--label_file", type=str, help="Path to a file holding all labels (default: %(default)s)")
 
@@ -222,6 +222,9 @@ def add_all_arguments(parser):
     parser.add_argument("--tree_degree", type=int, default=100, help="Degree of the tree (default: %(default)s)")
     parser.add_argument(
         "--tree_max_depth", type=int, default=10, help="Maximum depth of the tree (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--tree_ensemble_models", type=int, default=1, help="Number of models in the tree ensemble (default: %(default)s)"
     )
     parser.add_argument(
         "--beam_width",

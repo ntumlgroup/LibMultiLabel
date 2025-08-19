@@ -61,8 +61,7 @@ def init_model(
         model_name (str): Model to be used such as KimCNN.
         network_config (dict): Configuration for defining the network.
         classes (list): List of class names.
-        word_dict (torchtext.vocab.Vocab, optional): A vocab object for word tokenizer to
-            map tokens to indices. Defaults to None.
+        word_dict (dict, optional): A dictionary for mapping tokens to indices. Defaults to None.
         embed_vecs (torch.Tensor, optional): The pre-trained word vectors of shape
             (vocab_size, embed_dim). Defaults to None.
         init_weight (str): Weight initialization method from `torch.nn.init`.

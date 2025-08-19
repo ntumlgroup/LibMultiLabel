@@ -32,7 +32,7 @@ device = init_device()  # use gpu by default
 # To run KimCNN, LibMultiLabel tokenizes documents and uses an embedding vector for each word.
 # Thus, ``tokenize_text=True`` is set.
 #
-# We choose ``glove.6B.300d`` from torchtext as embedding vectors.
+# We choose ``glove.6B.300d`` as embedding vectors.
 
 datasets = load_datasets("data/rcv1/train.txt", "data/rcv1/test.txt", tokenize_text=True)
 classes = load_or_build_label(datasets)

@@ -77,7 +77,7 @@ If a model was trained before by this package, the training procedure can start 
 
 To use your own word embeddings or vocabulary set, specify the following parameters:
 
-- **embed_file**: choose one of the pretrained embeddings defined in `torchtext <https://pytorch.org/text/0.9.0/vocab.html#torchtext.vocab.Vocab.load_vectors>`_ or specify the path to your word embeddings with each line containing a word followed by its vectors. Example:
+- **embed_file**: choose one of the pretrained embeddings: `glove.6B.50d`, `glove.6B.100d`, `glove.6B.200d`, `glove.6B.300d`, `glove.42B.300d`, `glove.840B.300d`, or specify the path to your word embeddings with each line containing a word followed by its vectors. Example:
 
 .. code-block::
 
