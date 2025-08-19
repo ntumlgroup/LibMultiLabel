@@ -229,12 +229,6 @@ def add_all_arguments(parser):
         default=10,
         help="The width of the beam search (default: %(default)s)",
     )
-    parser.add_argument(
-        "--estimation_parameter",
-        type=float,
-        default=3,
-        help="The parameter for probability estimation function (default: %(default)s)"
-    )
 
     # AttentionXML
     parser.add_argument(
