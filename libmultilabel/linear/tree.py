@@ -426,6 +426,7 @@ def train_ensemble_tree(
     seed: int = None,
 ) -> EnsembleTreeModel:
     """Trains an ensemble of tree models (Parabel/Bonsai-style).
+    
     Args:
         y (sparse.csr_matrix): A 0/1 matrix with dimensions number of instances * number of classes.
         x (sparse.csr_matrix): A matrix with dimensions number of instances * number of features.
