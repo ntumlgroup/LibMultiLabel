@@ -1,5 +1,6 @@
 import logging
 import os
+import pickle
 
 import numpy as np
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -25,6 +26,8 @@ class TorchTrainer:
             Defaults to True.
     """
 
+    WORD_DICT_NAME = "word_dict.pickle"
+
     def __init__(
         self,
         config: dict,
@@ -43,6 +46,11 @@ class TorchTrainer:
         set_seed(seed=config.seed)
         self.device = init_device(use_cpu=config.cpu)
         self.config = config
+
+        # Set dataset meta info
+        self.embed_vecs = embed_vecs
+        self.word_dict = word_dict
+        self.classes = classes
 
         # Load pretrained tokenizer for dataset loader
         self.tokenizer = None
@@ -69,8 +77,9 @@ class TorchTrainer:
             # Note that AttentionXML produces two models. checkpoint_path directs to model_1
             if config.checkpoint_path is None:
                 if self.config.embed_file is not None:
-                    logging.info("Load word dictionary ")
-                    word_dict, embed_vecs = data_utils.load_or_build_text_dict(
+                    word_dict_path = os.path.join(self.checkpoint_dir, self.WORD_DICT_NAME)
+                    logging.info(f"Load and cache the word dictionary into {word_dict_path}.")
+                    self.word_dict, self.embed_vecs = data_utils.load_or_build_text_dict(
                         dataset=self.datasets["train"] + self.datasets["val"],
                         vocab_file=config.vocab_file,
                         min_vocab_freq=config.min_vocab_freq,
@@ -79,9 +88,11 @@ class TorchTrainer:
                         normalize_embed=config.normalize_embed,
                         embed_cache_dir=config.embed_cache_dir,
                     )
+                    with open(word_dict_path, "wb") as f:
+                        pickle.dump(self.word_dict, f)
 
-                if not classes:
-                    classes = data_utils.load_or_build_label(
+                if not self.classes:
+                    self.classes = data_utils.load_or_build_label(
                         self.datasets, self.config.label_file, self.config.include_test_labels
                     )
 
@@ -98,15 +109,12 @@ class TorchTrainer:
                         f"Add {self.config.val_metric} to `monitor_metrics`."
                     )
                     self.config.monitor_metrics += [self.config.val_metric]
-            self.trainer = PLTTrainer(self.config, classes=classes, embed_vecs=embed_vecs, word_dict=word_dict)
+            self.trainer = PLTTrainer(
+                self.config, classes=self.classes, embed_vecs=self.embed_vecs, word_dict=self.word_dict
+            )
             return
-        self._setup_model(
-            classes=classes,
-            word_dict=word_dict,
-            embed_vecs=embed_vecs,
-            log_path=self.log_path,
-            checkpoint_path=config.checkpoint_path,
-        )
+
+        self._setup_model(log_path=self.log_path, checkpoint_path=config.checkpoint_path)
         self.trainer = init_trainer(
             checkpoint_dir=self.checkpoint_dir,
             epochs=config.epochs,
@@ -125,9 +133,6 @@ class TorchTrainer:
 
     def _setup_model(
         self,
-        classes: list = None,
-        word_dict: dict = None,
-        embed_vecs=None,
         log_path: str = None,
         checkpoint_path: str = None,
     ):
@@ -135,9 +140,6 @@ class TorchTrainer:
         Otherwise, initialize model from scratch.
 
         Args:
-            classes(list): List of class names.
-            word_dict (dict, optional): A dictionary for mapping tokens to indices. Defaults to None.
-            embed_vecs (torch.Tensor): The pre-trained word vectors of shape (vocab_size, embed_dim).
             log_path (str): Path to the log file. The log file contains the validation
                 results for each epoch and the test results. If the `log_path` is None, no performance
                 results will be logged.
@@ -149,11 +151,16 @@ class TorchTrainer:
         if checkpoint_path is not None:
             logging.info(f"Loading model from `{checkpoint_path}` with the previously saved hyper-parameter...")
             self.model = Model.load_from_checkpoint(checkpoint_path, log_path=log_path)
+            word_dict_path = os.path.join(os.path.dirname(checkpoint_path), self.WORD_DICT_NAME)
+            if os.path.exists(word_dict_path):
+                with open(word_dict_path, "rb") as f:
+                    self.word_dict = pickle.load(f)
         else:
             logging.info("Initialize model from scratch.")
             if self.config.embed_file is not None:
-                logging.info("Load word dictionary ")
-                word_dict, embed_vecs = data_utils.load_or_build_text_dict(
+                word_dict_path = os.path.join(self.checkpoint_dir, self.WORD_DICT_NAME)
+                logging.info(f"Load and cache the word dictionary into {word_dict_path}.")
+                self.word_dict, self.embed_vecs = data_utils.load_or_build_text_dict(
                     dataset=self.datasets["train"],
                     vocab_file=self.config.vocab_file,
                     min_vocab_freq=self.config.min_vocab_freq,
@@ -162,8 +169,11 @@ class TorchTrainer:
                     normalize_embed=self.config.normalize_embed,
                     embed_cache_dir=self.config.embed_cache_dir,
                 )
-            if not classes:
-                classes = data_utils.load_or_build_label(
+                with open(word_dict_path, "wb") as f:
+                    pickle.dump(self.word_dict, f)
+
+            if not self.classes:
+                self.classes = data_utils.load_or_build_label(
                     self.datasets, self.config.label_file, self.config.include_test_labels
                 )
 
@@ -184,9 +194,8 @@ class TorchTrainer:
             self.model = init_model(
                 model_name=self.config.model_name,
                 network_config=dict(self.config.network_config),
-                classes=classes,
-                word_dict=word_dict,
-                embed_vecs=embed_vecs,
+                classes=self.classes,
+                embed_vecs=self.embed_vecs,
                 init_weight=self.config.init_weight,
                 log_path=log_path,
                 learning_rate=self.config.learning_rate,
@@ -222,7 +231,7 @@ class TorchTrainer:
             batch_size=self.config.batch_size if split == "train" else self.config.eval_batch_size,
             shuffle=shuffle,
             data_workers=self.config.data_workers,
-            word_dict=self.model.word_dict,
+            word_dict=self.word_dict,
             tokenizer=self.tokenizer,
             add_special_tokens=self.config.add_special_tokens,
         )

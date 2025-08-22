@@ -37,7 +37,6 @@ def init_model(
     model_name,
     network_config,
     classes,
-    word_dict=None,
     embed_vecs=None,
     init_weight=None,
     log_path=None,
@@ -61,7 +60,6 @@ def init_model(
         model_name (str): Model to be used such as KimCNN.
         network_config (dict): Configuration for defining the network.
         classes (list): List of class names.
-        word_dict (dict, optional): A dictionary for mapping tokens to indices. Defaults to None.
         embed_vecs (torch.Tensor, optional): The pre-trained word vectors of shape
             (vocab_size, embed_dim). Defaults to None.
         init_weight (str): Weight initialization method from `torch.nn.init`.
@@ -98,7 +96,6 @@ def init_model(
 
     model = Model(
         classes=classes,
-        word_dict=word_dict,
         network=network,
         log_path=log_path,
         learning_rate=learning_rate,
