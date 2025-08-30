@@ -56,7 +56,6 @@ model = init_model(
     model_name=model_name,
     network_config=network_config,
     classes=classes,
-    word_dict=word_dict,
     embed_vecs=embed_vecs,
     learning_rate=learning_rate,
     monitor_metrics=["Micro-F1", "Macro-F1", "P@1", "P@3", "P@5"],
@@ -66,7 +65,7 @@ model = init_model(
 # * ``model_name`` leads ``init_model`` function to find a network model.
 # * ``network_config`` contains the configurations of a network model.
 # * ``classes`` is the label set of the data.
-# * ``init_weight``, ``word_dict`` and ``embed_vecs`` are not used on a bert-base model, so we can ignore them.
+# * ``embed_vecs`` is the the pre-trained word vectors.
 # * ``moniter_metrics`` includes metrics you would like to track.
 #
 #

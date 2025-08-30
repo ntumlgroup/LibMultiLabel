@@ -70,7 +70,6 @@ model = init_model(
 # * ``model_name`` leads ``init_model`` function to find a network model.
 # * ``network_config`` contains the configurations of a network model.
 # * ``classes`` is the label set of the data.
-# * ``init_weight``, ``word_dict`` and ``embed_vecs`` are not used on a bert-base model, so we can ignore them.
 # * ``moniter_metrics`` includes metrics you would like to track.
 #
 #

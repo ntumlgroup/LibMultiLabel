@@ -26,6 +26,8 @@ The simplest usage is::
 
 .. autofunction:: train_tree
 
+.. autofunction:: train_ensemble_tree 
+
 .. autofunction:: predict_values
 
 .. autofunction:: get_topk_labels
