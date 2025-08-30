@@ -131,6 +131,8 @@ class ParallelOVRTrainer(threading.Thread):
         num_instances, num_classes = cls.y.shape
         num_features = cls.x.shape[1]
         cls.prob = problem(np.ones((num_instances,)), cls.x)
+
+        # remove "-m nr_thread" from options to prevent nested multi-threading
         cls.param = parameter(re.sub(r"-m\s+\d+", "", options))
         if cls.param.solver_type in [solver_names.L2R_L1LOSS_SVC_DUAL, solver_names.L2R_L2LOSS_SVC_DUAL]:
             cls.param.w_recalc = True  # only works for solving L1/L2-SVM dual
