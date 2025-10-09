@@ -9,6 +9,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 lib_path = os.path.abspath(os.path.join(current_dir, "..", ".."))
 sys.path.insert(0, lib_path)
 
+
 def classify_file_category(path):
 
     relative_path = Path(path).relative_to(lib_path)
@@ -30,28 +31,25 @@ def fetch_option_flags(flags):
 
     for flag in flags:
         flag_list.append(
-                {
-                    "name": flag["name"].replace("\\", ""),
-                    "instruction": flag["name"].split("-")[-1],
-                    "description": flag["description"]
-                }
-            )
+            {
+                "name": flag["name"].replace("\\", ""),
+                "instruction": flag["name"].split("-")[-1],
+                "description": flag["description"],
+            }
+        )
 
     return flag_list
 
 
 def fetch_all_files():
-    main_files = [
-        os.path.join(lib_path, "linear_trainer.py"),
-        os.path.join(lib_path, "torch_trainer.py")
-    ]
+    main_files = [os.path.join(lib_path, "linear_trainer.py"), os.path.join(lib_path, "torch_trainer.py")]
     lib_files = glob.glob(os.path.join(lib_path, "libmultilabel/**/*.py"), recursive=True)
     file_set = set(map(os.path.abspath, main_files + lib_files))
     return file_set
 
 
 def find_config_usages_in_file(file_path, allowed_keys):
-    pattern = re.compile(r'\bconfig\.([a-zA-Z_][a-zA-Z0-9_]*)')
+    pattern = re.compile(r"\bconfig\.([a-zA-Z_][a-zA-Z0-9_]*)")
     detailed_results = {}
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -77,7 +75,7 @@ def move_duplicates_together(data, keep):
     duplicates = set()
 
     for i, key1 in enumerate(all_keys):
-        for key2 in all_keys[i+1:]:
+        for key2 in all_keys[i + 1 :]:
             duplicates |= data[key1] & data[key2]
 
     data[keep] |= duplicates
@@ -99,7 +97,7 @@ def classify(raw_flags):
     collected = {}
 
     for file_path in file_set:
-        detailed_results = find_config_usages_in_file(file_path, allowed_keys)        
+        detailed_results = find_config_usages_in_file(file_path, allowed_keys)
         if detailed_results:
             usage_map[file_path] = set(detailed_results.keys())
             for k, v in detailed_results.items():
@@ -125,7 +123,9 @@ def classify(raw_flags):
     for flag in flags:
         if flag["category"] not in result:
             result[flag["category"]] = []
-        result[flag["category"]].append({"name": flag["name"].replace("--", r"\-\-"), "description": flag["description"]})
+        result[flag["category"]].append(
+            {"name": flag["name"].replace("--", r"\-\-"), "description": flag["description"]}
+        )
 
     result["details"] = []
     for k, v in collected.items():

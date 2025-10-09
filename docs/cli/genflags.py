@@ -34,8 +34,10 @@ main.add_all_arguments(parser)
 
 classified = classify(parser.flags)
 
+
 def width_title(key, title):
     return max(map(lambda f: len(f[key]), classified[title]))
+
 
 def print_table(title, flags, intro):
     print()
@@ -53,21 +55,22 @@ def print_table(title, flags, intro):
     print("=" * wn, "=" * wd)
     print()
 
+
 print_table(
     "general",
     classified["general"],
     intro="**General options**:\n\
-Common configurations shared across both linear and neural network trainers."
+Common configurations shared across both linear and neural network trainers.",
 )
 print_table(
     "linear",
     classified["linear"],
     intro="**Linear options**:\n\
-Configurations specific to linear trainer."
+Configurations specific to linear trainer.",
 )
 print_table(
     "nn",
     classified["nn"],
     intro="**Neural network options**:\n\
-Configurations specific to torch (neural networks) trainer."
+Configurations specific to torch (neural networks) trainer.",
 )
