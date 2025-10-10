@@ -26,7 +26,6 @@ def classify_file_category(path):
 
 
 def fetch_option_flags(flags):
-    # flags = genflags.parser.flags
     flag_list = []
 
     for flag in flags:
@@ -42,7 +41,11 @@ def fetch_option_flags(flags):
 
 
 def fetch_all_files():
-    main_files = [os.path.join(lib_path, "linear_trainer.py"), os.path.join(lib_path, "torch_trainer.py")]
+    main_files = [
+        os.path.join(lib_path, "main.py"),
+        os.path.join(lib_path, "linear_trainer.py"),
+        os.path.join(lib_path, "torch_trainer.py"),
+    ]
     lib_files = glob.glob(os.path.join(lib_path, "libmultilabel/**/*.py"), recursive=True)
     file_set = set(map(os.path.abspath, main_files + lib_files))
     return file_set
@@ -57,7 +60,18 @@ def find_config_usages_in_file(file_path, allowed_keys):
     except (IOError, UnicodeDecodeError):
         return []
 
-    category, path = classify_file_category(file_path)
+    _, path = classify_file_category(file_path)
+
+    if file_path.endswith("main.py"):
+        for idx in range(len(lines)):
+            if lines[idx].startswith("def main("):
+                lines = lines[idx:]
+                main_start = idx
+                break
+        for i, line in enumerate(lines[1:]):
+            if line and line[0] not in (" ", "\t") and line.strip() != "":
+                lines = lines[:i]
+                break
 
     for i, line in enumerate(lines, start=1):
         matches = pattern.findall(line)
@@ -65,7 +79,10 @@ def find_config_usages_in_file(file_path, allowed_keys):
             if key in allowed_keys:
                 if key not in detailed_results:
                     detailed_results[key] = {"file": path, "lines": []}
-                detailed_results[key]["lines"].append(str(i))
+                if file_path.endswith("main.py"):
+                    detailed_results[key]["lines"].append(str(i + main_start))
+                else:
+                    detailed_results[key]["lines"].append(str(i))
 
     return detailed_results
 
@@ -123,6 +140,7 @@ def classify(raw_flags):
     for flag in flags:
         if flag["category"] not in result:
             result[flag["category"]] = []
+
         result[flag["category"]].append(
             {"name": flag["name"].replace("--", r"\-\-"), "description": flag["description"]}
         )
