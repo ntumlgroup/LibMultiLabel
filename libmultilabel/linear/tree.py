@@ -204,7 +204,7 @@ def train_tree(
     K=DEFAULT_K,
     dmax=DEFAULT_DMAX,
     verbose: bool = True,
-    tree_root: Node = None,
+    root: Node = None,
     *args, **kwargs,
 ) -> TreeModel:
     """Train a linear model for multi-label data using a divide-and-conquer strategy.
@@ -221,7 +221,7 @@ def train_tree(
     Returns:
         TreeModel: A model which can be used in predict_values.
     """
-    if tree_root is None:
+    if root is None:
         label_representation = (y.T * x).tocsr()
         label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
         root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
@@ -267,18 +267,6 @@ def train_tree(
     return TreeModel(root, flat_model, node_ptr)
 
 
-import os, sys
-
-class silent_print:
-    def __enter__(self):
-        self._original_stdout = sys.stdout
-        sys.stdout = open(os.devnull, 'w')
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        sys.stdout.close()
-        sys.stdout = self._original_stdout
-
-
 def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, d: int, K: int, dmax: int) -> Node:
     """Build the tree recursively by kmeans clustering.
 
@@ -302,11 +290,10 @@ def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, 
         if True:
             metalabels = np.random.randint(0, K, label_representation.shape[0])
         else:
-            with silent_print():
-                kmeans = kmeans_algo(
-                    n_clusters=K, max_iter=300, tol=0.0001, random_state=np.random.randint(2**31 - 1), verbose=False
-                )
-                metalabels = kmeans.fit(label_representation)
+            kmeans = kmeans_algo(
+                n_clusters=K, max_iter=300, tol=0.0001, random_state=np.random.randint(2**31 - 1), verbose=False
+            )
+            metalabels = kmeans.fit(label_representation)
 
         unique_labels = np.unique(metalabels)
         if len(unique_labels) == K:

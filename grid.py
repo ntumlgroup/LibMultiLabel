@@ -1,10 +1,25 @@
+import os
+import sys
 from abc import abstractmethod
 from dataclasses import make_dataclass, field, fields, asdict
 from typing import Callable
 
 import libmultilabel.linear as linear
+from libmultilabel.linear.tree import _build_tree, silent_print
+
+import sklearn.preprocessing
 import numpy as np
 import math
+
+
+class silent_print:
+    def __enter__(self):
+        self._original_stdout = sys.stdout
+        sys.stdout = open(os.devnull, 'w')
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stdout.close()
+        sys.stdout = self._original_stdout
 
 
 class GridParameter:
@@ -69,9 +84,9 @@ class GridParameter:
 
 
 class GridSearch:
-    def __init__(self, data_source, n_folds, search_space, config=None):
+    def __init__(self, data_source: tuple[str, str], n_folds: int, search_space: list[dict], config=None):
         self.data_source = data_source
-        self.search_space = search_space
+        self.search_space = [GridParameter(params) for params in search_space]
         self.config = config
         self.n_folds = n_folds
         self.metrics = ["P@1", "P@3", "P@5"]
@@ -130,14 +145,14 @@ class GridSearch:
             dataset = self.get_dataset(params)
             # should be 000111222... or 012012012... (for same tfidf params but different params)
             # don't know whether 012012012 waste space (view or new data)?
-            for i in range(self.n_folds):
+            for fold in range(self.n_folds):
                 # secretly caching the tree root for each fold..
                 y_train_fold, x_train_fold, y_valid_fold, x_valid_fold = \
-                    self.get_fold_data(dataset, i, params)
+                    self.get_fold_data(dataset, fold, params)
 
-                print(f'\nRunning fold {i}\nparams: {params}')
-                self.model = self.get_model(y_train_fold, x_train_fold, params)
-                cv_score = self.get_cv_score(y_valid_fold, x_valid_fold, model, params)
+                print(f'\nRunning fold {fold}\nparams: {params}')
+                self.model = self.get_model(y_train_fold, x_train_fold, fold, params)
+                cv_score = self.get_cv_score(y_valid_fold, x_valid_fold, self.model, params)
                 print(f'cv_score: {cv_score}\n')
 
                 for metric in self.metrics:
@@ -159,7 +174,7 @@ class GridSearch:
         pass
 
     @abstractmethod
-    def get_model(self, y, x, params) -> linear.FlatModel | linear.TreeModel:
+    def get_model(self, y, x, fold, params) -> linear.FlatModel | linear.TreeModel:
         """
         Get the model for the given params.
 
@@ -180,6 +195,7 @@ class HyperparameterSearch(GridSearch):
         self._cached_tfidf_params = None
         self._cached_tfidf_data = None
         self._cached_tree_params = None
+        self._cached_tree_roots = {fold: None for fold in range(self.n_folds)}
         # pass directly in the product code (linear_trainer.py)
         self.dataset = linear.load_dataset("svm", self.data_source[0], self.data_source[1])
         self.num_instances = len(self.dataset["train"]["y"])
@@ -189,17 +205,33 @@ class HyperparameterSearch(GridSearch):
         if tfidf_params != self._cached_tfidf_params:
             print(f'Preprocessing tfidf: {tfidf_params}..')
             self._cached_tfidf_params = tfidf_params
-            self._cached_tfidf_data = linear.Preprocessor(tfidf_params=tfidf_params).fit_transform(self.dataset)
+            with silent_print():
+                preprocessor = linear.Preprocessor(tfidf_params=asdict(tfidf_params))
+                self._cached_tfidf_data = preprocessor.fit_transform(self.dataset)['train']
+
         return self._cached_tfidf_data
 
     def get_tree_root(self, y, x, params):
-        label_representation = (y.T * x).tocsr()
-        label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
-        root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
-        root.is_root = True
+        with silent_print():
+            label_representation = (y.T * x).tocsr()
+            label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
+            root = _build_tree(label_representation, np.arange(y.shape[1]), 0, **params)
+            root.is_root = True
 
-    def get_model(self, y, x, params):
-        model = linear.train_tree(y, x, **params)  # train with params and fold data
+        return root
+
+    def get_model(self, y, x, fold, params):
+        tree_params = params.tree
+        if tree_params != self._cached_tree_params:
+            self._cached_tree_params = tree_params
+            self._cached_tree_roots = {fold: None for fold in range(self.n_folds)}
+
+        if self._cached_tree_roots[fold] is None:
+            print(f'Preprocessing tree: {tree_params} on fold {fold}..')
+            self._cached_tree_roots[fold] = self.get_tree_root(y, x, asdict(tree_params))
+
+        model = linear.train_tree(y, x, root=self._cached_tree_roots[fold], options=params.linear_options)
+
         return model
 
 

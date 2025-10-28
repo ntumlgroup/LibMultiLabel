@@ -52,14 +52,9 @@ if __name__ == "__main__":
             'K': [2, 100],
         },
     }
-    search_space = {
-        'tfidf': [
-            {'max_features': i} for i in [10000]
-        ],
-        'params': [
-            {'K': i} for i in [2, 100]
-        ],
-    }
+    search_space = [
+        {'max_features': i, 'K': j} for i in [10000] for j in [2, 100]
+    ]
     print(search_space)
     n_folds = 3
     grid_search = grid.HyperparameterSearch(data_source, n_folds, search_space)
