@@ -204,6 +204,7 @@ def train_tree(
     K=DEFAULT_K,
     dmax=DEFAULT_DMAX,
     verbose: bool = True,
+    tree_root: Node = None,
     *args, **kwargs,
 ) -> TreeModel:
     """Train a linear model for multi-label data using a divide-and-conquer strategy.
@@ -220,10 +221,11 @@ def train_tree(
     Returns:
         TreeModel: A model which can be used in predict_values.
     """
-    label_representation = (y.T * x).tocsr()
-    label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
-    root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
-    root.is_root = True
+    if tree_root is None:
+        label_representation = (y.T * x).tocsr()
+        label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
+        root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
+        root.is_root = True
 
     num_nodes = 0
     # Both type(x) and type(y) are sparse.csr_matrix

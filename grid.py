@@ -1,27 +1,72 @@
 from abc import abstractmethod
+from dataclasses import make_dataclass, field, fields, asdict
+from typing import Callable
 
 import libmultilabel.linear as linear
 import numpy as np
 import math
 
-class Parameter:
-    def __init__(self, **params):
+
+class GridParameter:
+
+    _tfidf_fields = [
+        ('ngram_range', tuple[int, int], field(default=(1, 1))),
+        ('max_features', int, field(default=None)),
+        ('min_df', float | int, field(default=1)),
+        ('stop_words', str | list, field(default=None)),
+        ('strip_accents', str | Callable, field(default=None)),
+        ('tokenizer', Callable, field(default=None)),
+        ]
+    _tree_fields = [
+        ('dmax', int, field(default=10)),
+        ('K', int, field(default=8)),
+        ]
+    _linear_fields = [
+        ('s', int, field(default=1)),
+        ('c', float, field(default=1)),
+        ('B', int, field(default=-1)),
+        ]
+    _predict_fields = [
+        ('beam_width', int, field(default=10)),
+        ('A', int, field(default=1)),
+        ]
+
+    param_types = {
+        'tfidf': make_dataclass('_TfidfParams', _tfidf_fields, frozen=True, order=True),
+        'tree': make_dataclass('_TreeParams', _tree_fields, frozen=True, order=True),
+        'linear': make_dataclass('_LinearParams', _linear_fields, frozen=True, order=True),
+        'predict': make_dataclass('_PredictParams', _predict_fields, frozen=True, order=True),
+    }
+
+    def __init__(self, params: dict):
         self.params = params
-    
-    def tfidf(self):  # pad default value for compatibility
-        return self.params['tfidf']
+        for param_type, class_name in self.param_types.items():
+            field_names = {f.name for f in fields(class_name)}
+            _params = {k: v for k, v in self.params.items() if k in field_names}
+            setattr(self, param_type, class_name(**_params))
 
-    def tree(self):
-        return self.params['tree']
+    @property
+    def linear_options(self):
+        options = ''
+        for f in fields(self.linear):
+            options += f" -{f.name} {getattr(self.linear, f.name)}"
+        return options.strip()
 
-    def params(self):
-        return self.params['params']
+    def __repr__(self):
+        return str(self.params)
 
-    def inference(self):
-        return self.params['inference']
+    def __eq__(self, other):
+        return all(getattr(self, t) == getattr(other, t) for t in self.param_types)
 
+    def __lt__(self, other):
+        # "<" for tuple is automatically lexicographic ordering
+        my_values = tuple(getattr(self, t) for t in self.param_types)
+        other_values = tuple(getattr(other, t) for t in self.param_types)
+        return my_values < other_values
 
-param = Parameter(tfidf={'min_df': 1, 'max_features': 10000}, tree={'K': 2, 'dmax': 100})
+    def __hash__(self):
+        return hash(tuple(getattr(self, t) for t in self.param_types))
+
 
 class GridSearch:
     def __init__(self, data_source, n_folds, search_space, config=None):
@@ -31,31 +76,8 @@ class GridSearch:
         self.n_folds = n_folds
         self.metrics = ["P@1", "P@3", "P@5"]
 
-    def __call__(self):
-        self.build_data()
-        self.build_fold_idx()
-
-        results = {
-            (str(tfidf_param), str(param)): {metric: 0 for metric in self.metrics}
-            for tfidf_param in self.search_space['tfidf'] for param in self.search_space['params']
-            }
-        # for fold, params in zip(self.fold_space, self.search_space):
-        for tfidf_param in self.search_space['tfidf']:  # param should be an instance of a config class
-            avg_score = {metric: 0 for metric in self.metrics}
-            for i in range(self.n_folds):
-                y_train_fold, x_train_fold, y_valid_fold, x_valid_fold = \
-                    self.get_fold_data(i, tfidf_param)
-                for tree
-                for param in self.search_space['params']:
-                    print(f'\nRunning fold {i}\ntfidf: {tfidf_param}\nparams: {param}')
-                    model = self.get_model(y_train_fold, x_train_fold, param)
-                    cv_score = self.get_cv_score(y_valid_fold, x_valid_fold, model, param)
-                    print(f'cv_score: {cv_score}\n')
-                    for metric in self.metrics:
-                        results[(str(tfidf_param), str(param))][metric] += cv_score[metric] / self.n_folds
-
-        # TODO: Return a function
-        return sorted(results.items(), key=lambda x: x[1][self.metrics[0]], reverse=True)
+    def sort_search_space(self):
+        self.search_space.sort()
 
     def build_fold_idx(self):
         permutation = np.random.permutation(self.num_instances)
@@ -71,55 +93,13 @@ class GridSearch:
                 } for fold in range(self.n_folds)
             }
 
-    @abstractmethod
-    def build_data(self):
-        pass
-
-    @abstractmethod
-    def get_fold_data(self, i, param):
-        pass
-
-    @abstractmethod
-    def get_model(self, y_train_fold, x_train_fold, param):
-        pass
-
-    @abstractmethod
-    def get_cv_score(self, y_valid_fold, x_valid_fold, model, param):
-        pass
-
-
-class HyperparameterSearch(GridSearch):
-    def __init__(self, data_source, n_folds, search_space, config=None):
-        super().__init__(data_source, n_folds, search_space, config)
-
-    def preprocess_tfidf(self, dataset, param):
-        preprocessor = linear.Preprocessor(tfidf_params=param)
-        return preprocessor.fit_transform(dataset)
-
-    def build_data(self):
-        self.data = {}
-
-        dataset = linear.load_dataset("svm", self.data_source[0], self.data_source[1])
-        self.num_instances = len(dataset["train"]["y"])
-        tfidf_params = self.search_space['tfidf']
-        for param in tfidf_params:
-            print(f'Preprocessing tfidf: {param}..')
-            tfidf_data = self.preprocess_tfidf(dataset, param)
-            self.data[str(param)] = {'dataset': tfidf_data}
-        # use yield? (however, hard to reuse)
-
-    def get_fold_data(self, i, param):
-        dataset = self.data[str(param)]['dataset']["train"]
+    def get_fold_data(self, dataset, i, params):
         return (
             dataset["y"][self.fold_idx[i]['train']], dataset["x"][self.fold_idx[i]['train']],
             dataset["y"][self.fold_idx[i]['valid']], dataset["x"][self.fold_idx[i]['valid']]
             )
 
-    def get_model(self, y_train_fold, x_train_fold, param):
-        model = linear.train_tree(y_train_fold, x_train_fold, **param)  # train with param and fold data
-        return model
-
-    def metrics_in_batches(self, y, x, model, *args, **kwargs):
+    def get_cv_score(self, y, x, model, params):
         batch_size = 256
         num_instances = x.shape[0]
         num_batches = math.ceil(num_instances / batch_size)
@@ -133,15 +113,94 @@ class HyperparameterSearch(GridSearch):
 
         return metrics.compute()
 
-    def get_cv_score(self, y_valid_fold, x_valid_fold, model, param):
-        # calculate the metric with the model
-        score = self.metrics_in_batches(
-            y_valid_fold,
-            x_valid_fold,
-            model,
-            **param
-            )
-        return score
+    def output(self):  # return sorted params list with scores by default
+        return sorted(self.results.items(), key=lambda x: x[1][self.metrics[0]], reverse=True)
+
+    def __call__(self):
+        self.sort_search_space()
+        self.build_fold_idx()
+
+        self.results = {
+            params: {metric: 0 for metric in self.metrics}
+            for params in self.search_space
+            }
+        # for fold, params in zip(self.fold_space, self.search_space):
+        for params in self.search_space:  # params should be an instance of a config class
+            avg_score = {metric: 0 for metric in self.metrics}
+            dataset = self.get_dataset(params)
+            # should be 000111222... or 012012012... (for same tfidf params but different params)
+            # don't know whether 012012012 waste space (view or new data)?
+            for i in range(self.n_folds):
+                # secretly caching the tree root for each fold..
+                y_train_fold, x_train_fold, y_valid_fold, x_valid_fold = \
+                    self.get_fold_data(dataset, i, params)
+
+                print(f'\nRunning fold {i}\nparams: {params}')
+                self.model = self.get_model(y_train_fold, x_train_fold, params)
+                cv_score = self.get_cv_score(y_valid_fold, x_valid_fold, model, params)
+                print(f'cv_score: {cv_score}\n')
+
+                for metric in self.metrics:
+                    self.results[params][metric] += cv_score[metric] / self.n_folds
+
+        return self.output()
+
+    @abstractmethod
+    def get_dataset(self, params) -> dict[str, np.matrix]:
+        """
+        Get the dataset for the given params.
+
+        Args:
+            params (GridParameter): The params to build the dataset.
+
+        Returns:
+            dict[str, np.matrix]: The keys should be 'y' and 'x'.
+        """
+        pass
+
+    @abstractmethod
+    def get_model(self, y, x, params) -> linear.FlatModel | linear.TreeModel:
+        """
+        Get the model for the given params.
+
+        Args:
+            y (np.matrix): The labels of the training data.
+            x (np.matrix): The features of the training data.
+            params (GridParameter): The params to build the model.
+
+        Returns:
+            linear.FlatModel | linear.TreeModel: The model for the given params.
+        """
+        pass
+
+
+class HyperparameterSearch(GridSearch):
+    def __init__(self, data_source, n_folds, search_space, config=None):
+        super().__init__(data_source, n_folds, search_space, config)
+        self._cached_tfidf_params = None
+        self._cached_tfidf_data = None
+        self._cached_tree_params = None
+        # pass directly in the product code (linear_trainer.py)
+        self.dataset = linear.load_dataset("svm", self.data_source[0], self.data_source[1])
+        self.num_instances = len(self.dataset["train"]["y"])
+
+    def get_dataset(self, params):
+        tfidf_params = params.tfidf
+        if tfidf_params != self._cached_tfidf_params:
+            print(f'Preprocessing tfidf: {tfidf_params}..')
+            self._cached_tfidf_params = tfidf_params
+            self._cached_tfidf_data = linear.Preprocessor(tfidf_params=tfidf_params).fit_transform(self.dataset)
+        return self._cached_tfidf_data
+
+    def get_tree_root(self, y, x, params):
+        label_representation = (y.T * x).tocsr()
+        label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
+        root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
+        root.is_root = True
+
+    def get_model(self, y, x, params):
+        model = linear.train_tree(y, x, **params)  # train with params and fold data
+        return model
 
 
 class ProbEstimatiteSearch(GridSearch):
@@ -159,13 +218,13 @@ class ProbEstimatiteSearch(GridSearch):
 
         return data
 
-    def get_fold_data(self, data, i, param):
+    def get_fold_data(self, data, i, params):
         return data['unique'][i]
 
-    def get_model(self, y_train_fold, x_train_fold, param):
+    def get_model(self, y_train_fold, x_train_fold, params):
         model = None  # train normally with fold data
         return model
 
-    def get_cv_score(self, y_valid_fold, x_valid_fold, model, param):
+    def get_cv_score(self, y_valid_fold, x_valid_fold, model, params):
         score = None  # calculate the metric with the model and the hyperparameter A
         return score
