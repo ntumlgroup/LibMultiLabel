@@ -198,6 +198,7 @@ def train_1vsrest(
     multiclass: bool = False,
     options: str = "",
     verbose: bool = True,
+    *args, **kwargs,
 ) -> FlatModel:
     """Train a linear model parallel on labels for multi-label data using a one-vs-rest strategy.
 

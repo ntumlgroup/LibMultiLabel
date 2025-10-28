@@ -45,6 +45,7 @@ def linear_train(datasets, config):
     multiclass = is_multiclass_dataset(datasets["train"], "y")
 
     # train
+    # 1
     if config.linear_technique == "tree":
         if multiclass:
             raise ValueError("Tree model should only be used with multilabel datasets.")
@@ -74,6 +75,7 @@ def linear_train(datasets, config):
             multiclass=multiclass,
             options=config.liblinear_options,
         )
+    # 2
     return model
 
 
