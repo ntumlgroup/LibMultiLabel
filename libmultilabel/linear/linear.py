@@ -44,7 +44,7 @@ class FlatModel:
         self.thresholds = thresholds
         self.multiclass = multiclass
 
-    def predict_values(self, x: sparse.csr_matrix) -> np.ndarray:
+    def predict_values(self, x: sparse.csr_matrix, *args, **kwargs) -> np.ndarray:
         """Calculate the decision values associated with x.
 
         Args:

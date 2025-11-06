@@ -44,8 +44,17 @@ def linear_train(datasets, config):
     # detect task type
     multiclass = is_multiclass_dataset(datasets["train"], "y")
 
-    # train
-    # 1
+    do_grid = False
+    if do_grid:
+        search_space = [
+            {'max_features': i, 'K': j, 'min_df': k, 'c': l}
+            for i in [10000, 20000] for j in [10, 100] for k in [1, 2] for l in [0.1, 0.2]
+        ]
+        n_folds = 3
+        grid_search = linear.HyperparameterSearch(datasets, n_folds, search_space)
+        results = grid_search()
+        best_params = results[0]
+
     if config.linear_technique == "tree":
         if multiclass:
             raise ValueError("Tree model should only be used with multilabel datasets.")

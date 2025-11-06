@@ -62,6 +62,7 @@ class TreeModel:
         self,
         x: sparse.csr_matrix,
         beam_width: int = 10,
+        *args, **kwargs,
     ) -> np.ndarray:
         """Calculate the probability estimates associated with x.
 
@@ -287,7 +288,7 @@ def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, 
         else:
             kmeans_algo = LloydKmeans
 
-        if True:
+        if False:
             metalabels = np.random.randint(0, K, label_representation.shape[0])
         else:
             kmeans = kmeans_algo(
