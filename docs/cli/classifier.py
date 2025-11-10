@@ -85,7 +85,7 @@ def classify(raw_flags):
     for file_path in file_set:
         find_config_usages_in_file(file_path, allowed_keys, category_set)
 
-    category_set = move_duplicates_together(category_set)
+    move_duplicates_together(category_set)
 
     result = defaultdict(list)
     for flag in raw_flags:
