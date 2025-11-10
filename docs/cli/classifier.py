@@ -10,7 +10,6 @@ sys.path.insert(0, str(lib_path))
 
 
 def classify_file_category(path):
-
     relative_path = Path(path).relative_to(lib_path)
     filename = "/".join(relative_path.parts[1:]) or relative_path.as_posix()
 
@@ -71,8 +70,6 @@ def move_duplicates_together(data):
     data["general"].update(duplicates)
     data["linear"] -= duplicates
     data["nn"] -= duplicates
-
-    return data
 
 
 def classify(raw_flags):
