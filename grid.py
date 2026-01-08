@@ -1,4 +1,3 @@
-from abc import abstractmethod
 from dataclasses import make_dataclass, field, fields, asdict
 from typing import Callable
 
@@ -15,7 +14,7 @@ import math
 
 
 # suppress inevitable outputs from sparsekmeans and sklearn preprocessors
-class _silent_:
+class __silent__:
     def __init__(self):
         self.stderr = os.dup(2)
         self.devnull = os.open(os.devnull, os.O_WRONLY)
@@ -51,6 +50,7 @@ class GridParameter:
         ('s', int, field(default=1)),
         ('c', float, field(default=1)),
         ('B', int, field(default=-1)),
+        ('alpha', float, field(default=1))
         ]
     _predict_fields = [
         ('beam_width', int, field(default=10)),
@@ -98,17 +98,23 @@ class GridSearch:
     def __init__(
         self,
         datasets: dict[str, np.matrix],
-        n_folds: int,
-        search_space: list[dict],
-        metrics: list[str],
+        n_folds: int = 3,
+        metrics: list[str] = ["P@1", "P@3", "P@5"],
     ):
         self.datasets = datasets
-        self.search_space = [GridParameter(params) for params in search_space]
         self.n_folds = n_folds
         self.metrics = metrics
-        self.results = {
-            params: {metric: 0 for metric in self.metrics} for params in self.search_space
-            }
+
+        self._cached_tfidf_params = None
+        self._cached_tfidf_data = None
+        self._cached_tree_params = None
+        self._cached_tree_roots = {fold: None for fold in range(self.n_folds)}
+
+        self.num_instances = len(self.datasets["train"]["y"])
+
+    def init_tfidf_cache(self, datasets, params):
+        self._cached_tfidf_params = params.tfidf
+        self._cached_tfidf_data = datasets
 
     def sort_search_space(self):
         self.search_space.sort()
@@ -127,11 +133,67 @@ class GridSearch:
                 } for fold in range(self.n_folds)
             }
 
-    def get_fold_data(self, dataset, fold, params):
+    def get_dataset(self, params):
+        """
+        Get the dataset for the given params.
+
+        Args:
+            params (GridParameter): The params to build the dataset.
+
+        Returns:
+            dict[str, np.matrix]: The keys should be 'y' and 'x'.
+        """
+        tfidf_params = params.tfidf
+        if tfidf_params != self._cached_tfidf_params:
+            logging.info(f'Preprocessing tfidf: {tfidf_params}..')
+            self._cached_tfidf_params = tfidf_params
+            with __silent__():
+                preprocessor = linear.Preprocessor(tfidf_params=asdict(tfidf_params))
+                self._cached_tfidf_data = preprocessor.fit_transform(self.datasets)['train']
+
+        return self._cached_tfidf_data
+
+    def get_fold_data(self, dataset, fold):
         return (
             dataset["y"][self.fold_idx[fold]['train']], dataset["x"][self.fold_idx[fold]['train']],
             dataset["y"][self.fold_idx[fold]['valid']], dataset["x"][self.fold_idx[fold]['valid']]
             )
+
+    def get_tree_root(self, y, x, tree_params):
+        with __silent__():
+            label_representation = (y.T * x).tocsr()
+            label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
+            root = _build_tree(label_representation, np.arange(y.shape[1]), 0, **asdict(tree_params))
+            root.is_root = True
+
+        return root
+
+    def get_model(self, y, x, fold, params):
+        """
+        Get the model for the given params.
+
+        Args:
+            y (np.matrix): The labels of the training data.
+            x (np.matrix): The features of the training data.
+            params (GridParameter): The params to build the model.
+
+        Returns:
+            linear.FlatModel | linear.TreeModel: The model for the given params.
+        """
+        logging.info(f'\nRunning fold {fold}\nparams: {params}')
+
+        tree_params = params.tree
+        if tree_params != self._cached_tree_params:
+            self._cached_tree_params = tree_params
+            self._cached_tree_roots = {fold: None for fold in range(self.n_folds)}
+
+        if self._cached_tree_roots[fold] is None:
+            logging.info(f'Preprocessing tree: {tree_params} on fold {fold}..')
+            self._cached_tree_roots[fold] = self.get_tree_root(y, x, tree_params)
+
+        model = linear.train_tree(y, x, root=self._cached_tree_roots[fold], options=params.linear_options)
+
+        return model
 
     def get_cv_score(self, y, x, model, params):
         logging.info(f'Scoring params: {params.predict}')
@@ -157,10 +219,14 @@ class GridSearch:
     def output(self):
         return sorted(self.results.items(), key=lambda x: x[1][self.metrics[0]], reverse=True)
 
-    def __call__(self):
+    def __call__(self, search_space):
+        self.search_space = [GridParameter(params) for params in search_space]
         self.sort_search_space()
         self.build_fold_idx()
 
+        self.results = {
+            params: {metric: 0 for metric in self.metrics} for params in self.search_space
+            }
         for params in self.search_space:
             dataset = self.get_dataset(params)
             for fold in range(self.n_folds):
@@ -174,105 +240,3 @@ class GridSearch:
                     self.results[params][metric] += cv_score[metric] / self.n_folds
 
         return self.output()
-
-    @abstractmethod
-    def get_dataset(self, params) -> dict[str, np.matrix]:
-        """
-        Get the dataset for the given params.
-
-        Args:
-            params (GridParameter): The params to build the dataset.
-
-        Returns:
-            dict[str, np.matrix]: The keys should be 'y' and 'x'.
-        """
-        pass
-
-    @abstractmethod
-    def get_model(self, y, x, fold, params) -> linear.FlatModel | linear.TreeModel:
-        """
-        Get the model for the given params.
-
-        Args:
-            y (np.matrix): The labels of the training data.
-            x (np.matrix): The features of the training data.
-            params (GridParameter): The params to build the model.
-
-        Returns:
-            linear.FlatModel | linear.TreeModel: The model for the given params.
-        """
-        pass
-
-
-class HyperparameterSearch(GridSearch):
-    def __init__(self, datasets, n_folds, search_space, metrics=["P@1", "P@3", "P@5"]):
-        super().__init__(datasets, n_folds, search_space, metrics)
-        self._cached_tfidf_params = None
-        self._cached_tfidf_data = None
-        self._cached_tree_params = None
-        self._cached_tree_roots = {fold: None for fold in range(self.n_folds)}
-
-        self.num_instances = len(self.datasets["train"]["y"])
-
-    def get_dataset(self, params):
-        tfidf_params = params.tfidf
-        if tfidf_params != self._cached_tfidf_params:
-            logging.info(f'Preprocessing tfidf: {tfidf_params}..')
-            self._cached_tfidf_params = tfidf_params
-            with _silent_():
-                preprocessor = linear.Preprocessor(tfidf_params=asdict(tfidf_params))
-                self._cached_tfidf_data = preprocessor.fit_transform(self.datasets)['train']
-
-        return self._cached_tfidf_data
-
-    def get_tree_root(self, y, x, params):
-        with _silent_():
-            label_representation = (y.T * x).tocsr()
-            label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
-            root = _build_tree(label_representation, np.arange(y.shape[1]), 0, **params)
-            root.is_root = True
-
-        return root
-
-    def get_model(self, y, x, fold, params):
-        logging.info(f'\nRunning fold {fold}\nparams: {params}')
-
-        tree_params = params.tree
-        if tree_params != self._cached_tree_params:
-            self._cached_tree_params = tree_params
-            self._cached_tree_roots = {fold: None for fold in range(self.n_folds)}
-
-        if self._cached_tree_roots[fold] is None:
-            logging.info(f'Preprocessing tree: {tree_params} on fold {fold}..')
-            self._cached_tree_roots[fold] = self.get_tree_root(y, x, asdict(tree_params))
-
-        model = linear.train_tree(y, x, root=self._cached_tree_roots[fold], options=params.linear_options)
-
-        return model
-
-
-# class ProbEstimatiteSearch(GridSearch):
-#     def __init__(self, datasets, n_folds, search_space, config=None):
-#         super().__init__(datasets, n_folds, search_space, config)
-
-#     def build_data(self):
-#         data = {'unique': {}}
-#         unique_data = None  # from libmultilabel preprocessing
-#         for i in range(self.n_folds):
-#             train_idx, valid_idx = None, None
-#             y_train_fold, x_train_fold = unique_data[train_idx]
-#             y_valid_fold, x_valid_fold = unique_data[valid_idx]
-#             data['unique'][i] = unique_data
-
-#         return data
-
-#     def get_fold_data(self, data, i, params):
-#         return data['unique'][i]
-
-#     def get_model(self, y_train_fold, x_train_fold, params):
-#         model = None  # train normally with fold data
-#         return model
-
-#     def get_cv_score(self, y_valid_fold, x_valid_fold, model, params):
-#         score = None  # calculate the metric with the model and the hyperparameter A
-#         return score
