@@ -50,26 +50,28 @@ class GridParameter:
         ('s', int, field(default=1)),
         ('c', float, field(default=1)),
         ('B', int, field(default=-1)),
-        ('alpha', float, field(default=1))
+        ('alpha', float, field(default=1)),
         ]
     _predict_fields = [
         ('beam_width', int, field(default=10)),
         ('A', int, field(default=1)),
         ]
 
-    param_types = {
+    _param_types = {
         'tfidf': make_dataclass('TfidfParams', _tfidf_fields, frozen=True, order=True),
         'tree': make_dataclass('TreeParams', _tree_fields, frozen=True, order=True),
         'linear': make_dataclass('LinearParams', _linear_fields, frozen=True, order=True),
         'predict': make_dataclass('PredictParams', _predict_fields, frozen=True, order=True),
     }
 
-    def __init__(self, params: dict):
+    def __init__(self, params: dict, fold: int = -1):
         self.params = params
-        for param_type, class_name in self.param_types.items():
+        for param_type, class_name in self._param_types.items():
             field_names = {f.name for f in fields(class_name)}
             _params = {k: v for k, v in self.params.items() if k in field_names}
             setattr(self, param_type, class_name(**_params))
+        self.param_types = dict(self._param_types, fold=-1)
+        self.fold = fold
 
     @property
     def linear_options(self):
@@ -105,10 +107,13 @@ class GridSearch:
         self.n_folds = n_folds
         self.metrics = metrics
 
-        self._cached_tfidf_params = None
+        self._cached_params = GridParameter()
+        for param_type in self._cached_params.param_types:
+            self._cached_params[param_type] = None
         self._cached_tfidf_data = None
-        self._cached_tree_params = None
-        self._cached_tree_roots = {fold: None for fold in range(self.n_folds)}
+        self._cached_tree_root = None
+        self._cached_fold_data = None
+        self._cached_model = None
 
         self.num_instances = len(self.datasets["train"]["y"])
 
@@ -144,31 +149,42 @@ class GridSearch:
             dict[str, np.matrix]: The keys should be 'y' and 'x'.
         """
         tfidf_params = params.tfidf
-        if tfidf_params != self._cached_tfidf_params:
+        if tfidf_params != self._cached_params.tfidf:
             logging.info(f'Preprocessing tfidf: {tfidf_params}..')
-            self._cached_tfidf_params = tfidf_params
             with __silent__():
                 preprocessor = linear.Preprocessor(tfidf_params=asdict(tfidf_params))
+                self._cached_params.tfidf = tfidf_params
                 self._cached_tfidf_data = preprocessor.fit_transform(self.datasets)['train']
 
         return self._cached_tfidf_data
 
-    def get_fold_data(self, dataset, fold):
-        return (
-            dataset["y"][self.fold_idx[fold]['train']], dataset["x"][self.fold_idx[fold]['train']],
-            dataset["y"][self.fold_idx[fold]['valid']], dataset["x"][self.fold_idx[fold]['valid']]
-            )
+    def get_fold_data(self, dataset, params):
+        fold = params.fold
+        if params.tfidf != self._cached_params.tfidf or fold != self._cached_params.fold:
+            logging.info(f'Preprocessing fold: {fold} for tfidf: {params.tfidf}..')
+            self._cached_params.fold = fold
+            self._cached_fold_data = (
+                dataset["y"][self.fold_idx[fold]['train']], dataset["x"][self.fold_idx[fold]['train']],
+                dataset["y"][self.fold_idx[fold]['valid']], dataset["x"][self.fold_idx[fold]['valid']]
+                )
 
-    def get_tree_root(self, y, x, tree_params):
-        with __silent__():
-            label_representation = (y.T * x).tocsr()
-            label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
-            root = _build_tree(label_representation, np.arange(y.shape[1]), 0, **asdict(tree_params))
-            root.is_root = True
+        return self._cached_fold_data
 
-        return root
+    def get_tree_root(self, y, x, params):
+        tree_params = params.tree
+        if params.tfidf != self._cached_params.tfidf or tree_params != self._cached_params.tree or \
+            params.fold != self._cached_params.fold:
+            logging.info(f'Preprocessing tree: {tree_params} on fold {params.fold} for tfidf: {params.tfidf}..')
+            with __silent__():
+                label_representation = (y.T * x).tocsr()
+                label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
+                self._cached_params.tree = tree_params
+                self._cached_tree_root = _build_tree(label_representation, np.arange(y.shape[1]), 0, **asdict(tree_params))
+                self._cached_tree_root.is_root = True
 
-    def get_model(self, y, x, fold, params):
+        return self._cached_tree_root
+
+    def get_model(self, y, x, params):
         """
         Get the model for the given params.
 
@@ -180,20 +196,17 @@ class GridSearch:
         Returns:
             linear.FlatModel | linear.TreeModel: The model for the given params.
         """
-        logging.info(f'\nRunning fold {fold}\nparams: {params}')
+        logging.info(f'\nRunning fold {params.fold}\nparams: {params}')
 
-        tree_params = params.tree
-        if tree_params != self._cached_tree_params:
-            self._cached_tree_params = tree_params
-            self._cached_tree_roots = {fold: None for fold in range(self.n_folds)}
+        linear_params = params.linear
+        if params.tfidf != self._cached_params.tfidf or params.tree != self._cached_params.tree or \
+            linear_params != self._cached_params.linear or params.fold != self._cached_params.fold:
+            logging.info(f'Preprocessing linear: {linear_params}, tree: {params.tree} on fold {params.fold} for tfidf: {params.tfidf}..')
+            root = self.get_tree_root(y, x, params)
+            self._cached_params.linear = linear_params
+            self._cached_model = linear.train_tree(y, x, root=root, options=params.linear_options)
 
-        if self._cached_tree_roots[fold] is None:
-            logging.info(f'Preprocessing tree: {tree_params} on fold {fold}..')
-            self._cached_tree_roots[fold] = self.get_tree_root(y, x, tree_params)
-
-        model = linear.train_tree(y, x, root=self._cached_tree_roots[fold], options=params.linear_options)
-
-        return model
+        return self._cached_model
 
     def get_cv_score(self, y, x, model, params):
         logging.info(f'Scoring params: {params.predict}')
@@ -220,23 +233,23 @@ class GridSearch:
         return sorted(self.results.items(), key=lambda x: x[1][self.metrics[0]], reverse=True)
 
     def __call__(self, search_space):
-        self.search_space = [GridParameter(params) for params in search_space]
+        self.search_space = [GridParameter(params, fold) for params in search_space for fold in range(self.n_folds)]
         self.sort_search_space()
         self.build_fold_idx()
 
         self.results = {
-            params: {metric: 0 for metric in self.metrics} for params in self.search_space
+            GridParameter(params): {metric: 0 for metric in self.metrics} for params in search_space
             }
         for params in self.search_space:
             dataset = self.get_dataset(params)
-            for fold in range(self.n_folds):
-                y_train_fold, x_train_fold, y_valid_fold, x_valid_fold = \
-                    self.get_fold_data(dataset, fold, params)
+            y_train_fold, x_train_fold, y_valid_fold, x_valid_fold = \
+                self.get_fold_data(dataset, params)
 
-                model = self.get_model(y_train_fold, x_train_fold, fold, params)
-                cv_score = self.get_cv_score(y_valid_fold, x_valid_fold, model, params)
+            model = self.get_model(y_train_fold, x_train_fold, params)
+            cv_score = self.get_cv_score(y_valid_fold, x_valid_fold, model, params)
 
-                for metric in self.metrics:
-                    self.results[params][metric] += cv_score[metric] / self.n_folds
+            params.fold = -1
+            for metric in self.metrics:
+                self.results[params][metric] += cv_score[metric] / self.n_folds
 
         return self.output()
