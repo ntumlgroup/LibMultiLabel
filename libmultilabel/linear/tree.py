@@ -136,7 +136,7 @@ class TreeModel:
         # Calculate root decision values and scores
         root_preds = linear.predict_values(self.root_model, x)
         # children_scores = 0.0 - np.square(np.maximum(0, 1 - root_preds))
-        children_scores = 0.0 + self.sigmoid_A(root_preds)
+        children_scores = 0.0 + sigmoid_A(root_preds)
 
         slice = np.s_[:, self.node_ptr[self.root.index] : self.node_ptr[self.root.index + 1]]
         all_preds[slice] = root_preds
@@ -187,7 +187,7 @@ class TreeModel:
                 slice = np.s_[self.node_ptr[node.index] : self.node_ptr[node.index + 1]]
                 pred = instance_preds[slice]
                 # children_score = score - np.square(np.maximum(0, 1 - pred))
-                children_score = score + self.sigmoid_A(pred)
+                children_score = score + sigmoid_A(pred)
                 next_level.extend(zip(node.children, children_score.tolist()))
 
             cur_level = sorted(next_level, key=lambda pair: -pair[1])[:beam_width]
@@ -199,7 +199,7 @@ class TreeModel:
             slice = np.s_[self.node_ptr[node.index] : self.node_ptr[node.index + 1]]
             pred = instance_preds[slice]
             # scores[node.label_map] = np.exp(score - np.square(np.maximum(0, 1 - pred)))
-            scores[node.label_map] = np.exp(score + self.sigmoid_A(pred))
+            scores[node.label_map] = np.exp(score + sigmoid_A(pred))
         return scores
 
 
