@@ -4,6 +4,7 @@ from typing import Callable
 
 import numpy as np
 import scipy.sparse as sparse
+from scipy.special import log_expit
 from sparsekmeans import LloydKmeans, ElkanKmeans
 import sklearn.preprocessing
 from tqdm import tqdm
@@ -62,7 +63,7 @@ class TreeModel:
         self,
         x: sparse.csr_matrix,
         beam_width: int = 10,
-        *args, **kwargs,
+        A: int = 3,
     ) -> np.ndarray:
         """Calculate the probability estimates associated with x.
 
@@ -73,6 +74,7 @@ class TreeModel:
         Returns:
             np.ndarray: A matrix with dimension number of instances * number of classes.
         """
+        sigmoid_A = lambda x: log_expit(A * x)
         if beam_width >= len(self.root.children):
             # Beam_width is sufficiently large; pruning not applied.
             # Calculates decision values for all nodes.
@@ -82,8 +84,8 @@ class TreeModel:
             if not self._model_separated:
                 self._separate_model_for_pruning_tree()
                 self._model_separated = True
-            all_preds = self._prune_tree_and_predict_values(x, beam_width) # number of instances * (number of labels + total number of metalabels)
-        return np.vstack([self._beam_search(all_preds[i], beam_width) for i in range(all_preds.shape[0])])
+            all_preds = self._prune_tree_and_predict_values(x, beam_width, sigmoid_A) # number of instances * (number of labels + total number of metalabels)
+        return np.vstack([self._beam_search(all_preds[i], beam_width, sigmoid_A) for i in range(all_preds.shape[0])])
 
     def _separate_model_for_pruning_tree(self):
         """
@@ -114,7 +116,7 @@ class TreeModel:
             )
             self.subtree_models.append(subtree_flatmodel)
         
-    def _prune_tree_and_predict_values(self, x: sparse.csr_matrix, beam_width: int) -> np.ndarray:
+    def _prune_tree_and_predict_values(self, x: sparse.csr_matrix, beam_width: int, sigmoid_A: Callable) -> np.ndarray:
         """Calculates the selective decision values associated with instances x by evaluating only the most relevant subtrees.
 
         Only subtrees corresponding to the top beam_width candidates from the root are evaluated,
@@ -133,7 +135,8 @@ class TreeModel:
 
         # Calculate root decision values and scores
         root_preds = linear.predict_values(self.root_model, x)
-        children_scores = 0.0 - np.square(np.maximum(0, 1 - root_preds))
+        # children_scores = 0.0 - np.square(np.maximum(0, 1 - root_preds))
+        children_scores = 0.0 + self.sigmoid_A(root_preds)
 
         slice = np.s_[:, self.node_ptr[self.root.index] : self.node_ptr[self.root.index + 1]]
         all_preds[slice] = root_preds
@@ -160,7 +163,7 @@ class TreeModel:
 
         return all_preds
 
-    def _beam_search(self, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
+    def _beam_search(self, instance_preds: np.ndarray, beam_width: int, sigmoid_A: Callable) -> np.ndarray:
         """Predict with beam search using cached probability estimates for a single instance.
 
         Args:
@@ -183,7 +186,8 @@ class TreeModel:
                     continue
                 slice = np.s_[self.node_ptr[node.index] : self.node_ptr[node.index + 1]]
                 pred = instance_preds[slice]
-                children_score = score - np.square(np.maximum(0, 1 - pred))
+                # children_score = score - np.square(np.maximum(0, 1 - pred))
+                children_score = score + self.sigmoid_A(pred)
                 next_level.extend(zip(node.children, children_score.tolist()))
 
             cur_level = sorted(next_level, key=lambda pair: -pair[1])[:beam_width]
@@ -194,7 +198,8 @@ class TreeModel:
         for node, score in cur_level:
             slice = np.s_[self.node_ptr[node.index] : self.node_ptr[node.index + 1]]
             pred = instance_preds[slice]
-            scores[node.label_map] = np.exp(score - np.square(np.maximum(0, 1 - pred)))
+            # scores[node.label_map] = np.exp(score - np.square(np.maximum(0, 1 - pred)))
+            scores[node.label_map] = np.exp(score + self.sigmoid_A(pred))
         return scores
 
 
@@ -206,7 +211,6 @@ def train_tree(
     dmax=DEFAULT_DMAX,
     verbose: bool = True,
     root: Node = None,
-    *args, **kwargs,
 ) -> TreeModel:
     """Train a linear model for multi-label data using a divide-and-conquer strategy.
     The algorithm used is based on https://github.com/xmc-aalto/bonsai.

@@ -44,7 +44,7 @@ class FlatModel:
         self.thresholds = thresholds
         self.multiclass = multiclass
 
-    def predict_values(self, x: sparse.csr_matrix, *args, **kwargs) -> np.ndarray:
+    def predict_values(self, x: sparse.csr_matrix) -> np.ndarray:
         """Calculate the decision values associated with x.
 
         Args:
@@ -198,7 +198,6 @@ def train_1vsrest(
     multiclass: bool = False,
     options: str = "",
     verbose: bool = True,
-    *args, **kwargs,
 ) -> FlatModel:
     """Train a linear model parallel on labels for multi-label data using a one-vs-rest strategy.
 
