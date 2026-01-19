@@ -50,28 +50,34 @@ class GridParameter:
         ('s', int, field(default=1)),
         ('c', float, field(default=1)),
         ('B', int, field(default=-1)),
-        ('alpha', float, field(default=1)),
+        # ('alpha', float, field(default=1)),
         ]
     _predict_fields = [
         ('beam_width', int, field(default=10)),
         ('A', int, field(default=1)),
         ]
 
-    _param_types = {
+    param_types = {
         'tfidf': make_dataclass('TfidfParams', _tfidf_fields, frozen=True, order=True),
+        'fold': lambda fold: fold,
         'tree': make_dataclass('TreeParams', _tree_fields, frozen=True, order=True),
         'linear': make_dataclass('LinearParams', _linear_fields, frozen=True, order=True),
         'predict': make_dataclass('PredictParams', _predict_fields, frozen=True, order=True),
     }
 
-    def __init__(self, params: dict, fold: int = -1):
-        self.params = params
-        for param_type, class_name in self._param_types.items():
-            field_names = {f.name for f in fields(class_name)}
-            _params = {k: v for k, v in self.params.items() if k in field_names}
-            setattr(self, param_type, class_name(**_params))
-        self.param_types = dict(self._param_types, fold=-1)
-        self.fold = fold
+    def __init__(self, params: dict | None = None, fold: int = -1):
+        self.params = params or {}
+
+        params_set = set(self.params)
+        for param_type, class_name in self.param_types.items():
+            if param_type == 'fold':
+                filtered_params = {'fold': fold}
+            else:
+                field_names = {f.name for f in fields(class_name)}
+                filtered_keys = params_set & field_names
+                params_set -= field_names
+                filtered_params = {k: self.params[k] for k in filtered_keys}
+            setattr(self, param_type, class_name(**filtered_params))
 
     @property
     def linear_options(self):
@@ -109,7 +115,7 @@ class GridSearch:
 
         self._cached_params = GridParameter()
         for param_type in self._cached_params.param_types:
-            self._cached_params[param_type] = None
+            setattr(self._cached_params, param_type, None)
         self._cached_tfidf_data = None
         self._cached_tree_root = None
         self._cached_fold_data = None
