@@ -120,12 +120,13 @@ class GridSearch:
         self._cached_tree_root = None
         self._cached_fold_data = None
         self._cached_model = None
+        self.no_cache = True
 
         self.num_instances = len(self.datasets["train"]["y"])
 
-    def init_tfidf_cache(self, datasets, params):
-        self._cached_tfidf_params = params.tfidf
-        self._cached_tfidf_data = datasets
+    # def init_tfidf_cache(self, datasets, params):
+    #     self._cached_tfidf_params = params.tfidf
+    #     self._cached_tfidf_data = datasets
 
     def sort_search_space(self):
         self.search_space.sort()
@@ -155,7 +156,8 @@ class GridSearch:
             dict[str, np.matrix]: The keys should be 'y' and 'x'.
         """
         tfidf_params = params.tfidf
-        if tfidf_params != self._cached_params.tfidf:
+        self.no_cache = (tfidf_params != self._cached_params.tfidf)
+        if self.no_cache:
             logging.info(f'Preprocessing tfidf: {tfidf_params}..')
             with __silent__():
                 preprocessor = linear.Preprocessor(tfidf_params=asdict(tfidf_params))
@@ -166,7 +168,8 @@ class GridSearch:
 
     def get_fold_data(self, dataset, params):
         fold = params.fold
-        if params.tfidf != self._cached_params.tfidf or fold != self._cached_params.fold:
+        self.no_cache |= (fold != self._cached_params.fold)
+        if self.no_cache:
             logging.info(f'Preprocessing fold: {fold} for tfidf: {params.tfidf}..')
             self._cached_params.fold = fold
             self._cached_fold_data = (
@@ -178,8 +181,8 @@ class GridSearch:
 
     def get_tree_root(self, y, x, params):
         tree_params = params.tree
-        if params.tfidf != self._cached_params.tfidf or tree_params != self._cached_params.tree or \
-            params.fold != self._cached_params.fold:
+        self.no_cache |= (tree_params != self._cached_params.tree)
+        if self.no_cache:
             logging.info(f'Preprocessing tree: {tree_params} on fold {params.fold} for tfidf: {params.tfidf}..')
             with __silent__():
                 label_representation = (y.T * x).tocsr()
@@ -204,24 +207,26 @@ class GridSearch:
         """
         logging.info(f'\nRunning fold {params.fold}\nparams: {params}')
 
+        root = self.get_tree_root(y, x, params)
+
         linear_params = params.linear
-        if params.tfidf != self._cached_params.tfidf or params.tree != self._cached_params.tree or \
-            linear_params != self._cached_params.linear or params.fold != self._cached_params.fold:
+        self.no_cache |= (linear_params != self._cached_params.linear)
+        if self.no_cache:
             logging.info(f'Preprocessing linear: {linear_params}, tree: {params.tree} on fold {params.fold} for tfidf: {params.tfidf}..')
-            root = self.get_tree_root(y, x, params)
-            self._cached_params.linear = linear_params
-            self._cached_model = linear.train_tree(y, x, root=root, options=params.linear_options)
+            with __silent__():
+                self._cached_params.linear = linear_params
+                self._cached_model = linear.train_tree(y, x, root=root, options=params.linear_options)
 
         return self._cached_model
 
-    def get_cv_score(self, y, x, model, params):
+    def get_cv_score(self, y, x, model, params, metrics):
         logging.info(f'Scoring params: {params.predict}')
 
         batch_size = 256
         num_instances = x.shape[0]
         num_batches = math.ceil(num_instances / batch_size)
 
-        metrics = linear.get_metrics(self.metrics, num_classes=y.shape[1])
+        # metrics = linear.get_metrics(self.metrics, num_classes=y.shape[1])
 
         for i in range(num_batches):
             preds = model.predict_values(
@@ -230,6 +235,7 @@ class GridSearch:
             target = y[i * batch_size : (i + 1) * batch_size].toarray()
             metrics.update(preds, target)
 
+        # return metrics
         scores = metrics.compute()
         logging.info(f'cv_score: {scores}\n')
 
@@ -244,18 +250,20 @@ class GridSearch:
         self.build_fold_idx()
 
         self.results = {
-            GridParameter(params): {metric: 0 for metric in self.metrics} for params in search_space
+            GridParameter(params): linear.get_metrics(self.metrics, num_classes=y.shape[1]) for params in search_space
             }
         for params in self.search_space:
+            # for fold in self.n_folds:
             dataset = self.get_dataset(params)
             y_train_fold, x_train_fold, y_valid_fold, x_valid_fold = \
                 self.get_fold_data(dataset, params)
 
             model = self.get_model(y_train_fold, x_train_fold, params)
-            cv_score = self.get_cv_score(y_valid_fold, x_valid_fold, model, params)
-
             params.fold = -1
-            for metric in self.metrics:
-                self.results[params][metric] += cv_score[metric] / self.n_folds
+            cv_score = self.get_cv_score(y_valid_fold, x_valid_fold, model, params, self.results[params])
+
+            # params.fold = -1
+            # for metric in self.metrics:
+            #     # self.results[params][metric] += cv_score[metric] / self.n_folds
 
         return self.output()
