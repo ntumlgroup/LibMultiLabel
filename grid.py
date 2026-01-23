@@ -159,13 +159,15 @@ class GridSearch:
         tfidf_params = params.tfidf
         self.no_cache = (tfidf_params != self._cached_params.tfidf)
         if self.no_cache:
-            logging.info(f"Preprocessing tfidf: {tfidf_params}")
+            logging.info(f"TFIDF  - Preprocessing: {tfidf_params}")
             if self.datasets["data_format"] not in {"txt", "dataframe"}:
                 logging.info('The TF-IDF parameters are only meaningful for the “txt” and “dataframe” data formats.')
             with __silent__():
                 preprocessor = linear.Preprocessor(tfidf_params=asdict(tfidf_params))
                 self._cached_params.tfidf = tfidf_params
                 self._cached_transformed_dataset = preprocessor.fit_transform(dataset)
+        else:
+            logging.info(f"TFIDF  - Using cached data: {tfidf_params}")
 
         return self._cached_transformed_dataset
 
@@ -173,13 +175,15 @@ class GridSearch:
         tree_params = params.tree
         self.no_cache |= (tree_params != self._cached_params.tree)
         if self.no_cache:
-            logging.info(f"Preprocessing tree: {tree_params}")
+            logging.info(f"Tree   - Preprocessing: {tree_params}")
             with __silent__():
                 label_representation = (y.T * x).tocsr()
                 label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
                 self._cached_params.tree = tree_params
                 self._cached_tree_root = _build_tree(label_representation, np.arange(y.shape[1]), 0, **asdict(tree_params))
                 self._cached_tree_root.is_root = True
+        else:
+            logging.info(f"Tree   - Using cached data: {tree_params}")
 
         return self._cached_tree_root
 
@@ -200,15 +204,17 @@ class GridSearch:
         linear_params = params.linear
         self.no_cache |= (linear_params != self._cached_params.linear)
         if self.no_cache:
-            logging.info(f"Training: {linear_params}")
+            logging.info(f"Model  - Training: {linear_params}")
             with __silent__():
                 self._cached_params.linear = linear_params
                 self._cached_model = linear.train_tree(y, x, root=root, options=params.linear_options)
+        else:
+            logging.info(f"Model  - Using cached data: {linear_params}")
 
         return self._cached_model
 
     def compute_scores(self, y, x, model, params):
-        logging.info(f"Scoring: {params.predict}")
+        logging.info(f"Metric - Scoring: {params.predict}\n")
 
         batch_size = 256
         num_instances = x.shape[0]
@@ -223,8 +229,6 @@ class GridSearch:
                 **asdict(params.predict))
             target = y[i * batch_size : (i + 1) * batch_size].toarray()
             self.param_metrics[params].update(preds, target)
-
-        logging.info(f"cv_score: {self.param_metrics[params].compute()}\n")
 
     def __call__(self, search_space_dict: dict[str, list]) -> dict[GridParameter, dict[str, float]]:
         self.param_metrics.clear()
@@ -248,7 +252,7 @@ class GridSearch:
 
             self._cached_params.tfidf = None
             for params in self.search_space:
-                logging.info(f"Running fold {fold}, params: {params}")
+                logging.info(f"Status - Running fold {fold}, params: {params}")
 
                 transformed_dataset = self.get_transformed_dataset(fold_dataset, params)
                 model = self.get_model(
