@@ -55,7 +55,7 @@ class GridParameter:
         ]
     _predict_fields = [
         ("beam_width", int, field(default=10)),
-        ("A", int, field(default=1)),
+        ("prob_A", int, field(default=1)),
         ]
 
     param_types = {
