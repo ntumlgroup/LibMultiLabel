@@ -32,6 +32,7 @@ if __name__ == "__main__":
         'min_df': [1, 2],
         'prob_A': [2, 3],
         'c': [0.1, 0.2],
+        'pruning_alpha': [0.9, 0.7],
     }
 
     search = grid.GridSearch(dataset, n_folds, monitor_metrics)

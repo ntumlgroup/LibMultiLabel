@@ -308,13 +308,10 @@ def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, 
         else:
             kmeans_algo = LloydKmeans
 
-        if False:
-            metalabels = np.random.randint(0, K, label_representation.shape[0])
-        else:
-            kmeans = kmeans_algo(
-                n_clusters=K, max_iter=300, tol=0.0001, random_state=np.random.randint(2**31 - 1), verbose=False
-            )
-            metalabels = kmeans.fit(label_representation)
+        kmeans = kmeans_algo(
+            n_clusters=K, max_iter=300, tol=0.0001, random_state=np.random.randint(2**31 - 1), verbose=False
+        )
+        metalabels = kmeans.fit(label_representation)
 
         unique_labels = np.unique(metalabels)
         if len(unique_labels) == K:

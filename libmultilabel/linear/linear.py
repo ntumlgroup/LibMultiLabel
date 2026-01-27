@@ -186,14 +186,14 @@ class ParallelOVRTrainer(threading.Thread):
         for key in list(cls.__annotations__):
             delattr(cls, key)
 
-    def _do_parallel_train(self, y: np.ndarray) -> np.matrix:
+    def _do_parallel_train(self, y: np.ndarray) -> np.ndarray:
         """Wrap around liblinear.liblinearutil.train.
 
         Args:
             y (np.ndarray): A +1/-1 array with dimensions number of instances * 1.
 
         Returns:
-            np.matrix: The weights.
+            np.ndarray: The weights.
         """
         if y.shape[0] == 0:
             return np.matrix(np.zeros((self.prob.n, 1)))
@@ -203,7 +203,6 @@ class ParallelOVRTrainer(threading.Thread):
         model = train(prob, self.param)
 
         w = np.ctypeslib.as_array(model.w, (self.prob.n, 1))
-        w = np.asmatrix(w)
         # When all labels are -1, we must flip the sign of the weights
         # because LIBLINEAR treats the first label as positive, which
         # is -1 in this case. But for our usage we need them to be negative.

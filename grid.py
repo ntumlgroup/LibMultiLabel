@@ -7,10 +7,12 @@ import itertools
 import logging
 
 import libmultilabel.linear as linear
-from libmultilabel.linear.tree import _build_tree
+from libmultilabel.linear.tree import TreeModel, _build_tree
+from libmultilabel.linear.linear import _pruning_weights
 
 import sklearn.preprocessing
 import numpy as np
+import scipy.sparse as sparse
 import math
 
 
@@ -51,11 +53,11 @@ class GridParameter:
         ("s", int, field(default=1)),
         ("c", float, field(default=1)),
         ("B", int, field(default=-1)),
-        # ("alpha", float, field(default=1)),
+        ("pruning_alpha", float, field(default=1)),
         ]
     _predict_fields = [
         ("beam_width", int, field(default=10)),
-        ("prob_A", int, field(default=1)),
+        ("prob_A", int, field(default=3)),
         ]
 
     param_types = {
@@ -84,8 +86,9 @@ class GridParameter:
     @property
     def linear_options(self):
         options = ""
-        for f in fields(self.linear):
-            options += f" -{f.name} {getattr(self.linear, f.name)}"
+        linear_field_names = (self._param_field_names['linear'] - {'pruning_alpha'})
+        for field_name in linear_field_names:
+            options += f" -{field_name} {getattr(self.linear, field_name)}"
         return options.strip()
 
     def __repr__(self):
@@ -102,6 +105,27 @@ class GridParameter:
 
     def __hash__(self):
         return hash(tuple(getattr(self, t) for t in self.param_types))
+
+
+def pruning_flat_model(flat_model: linear.FlatModel, pruning_alpha: float) -> np.ndarray:
+    """Prune the weights of the flat model.
+
+    Args:
+        flat_model (linear.FlatModel): The flat model.
+        pruning_alpha (float): Fraction of weights to keep after pruning.
+
+    Returns:
+        np.ndarray: The flat model with the pruned weights.
+    """
+    num_classes = flat_model.weights.shape[1]
+    weights = []
+
+    for i in range(num_classes):
+        weight = flat_model.weights[:, i].toarray().ravel()
+        weights.append(sparse.csc_matrix(_pruning_weights(weight, pruning_alpha)))
+
+    flat_model.weights = sparse.hstack(weights, "csc")
+    return flat_model
 
 
 class GridSearch:
@@ -202,12 +226,29 @@ class GridSearch:
         root = self.get_tree_root(y, x, params)
 
         linear_params = params.linear
-        self.no_cache |= (linear_params != self._cached_params.linear)
-        if self.no_cache:
-            logging.info(f"Model  - Training: {linear_params}")
-            with __silent__():
-                self._cached_params.linear = linear_params
-                self._cached_model = linear.train_tree(y, x, root=root, options=params.linear_options)
+        pruning_alpha = linear_params.pruning_alpha
+
+        if self.no_cache or (linear_params != self._cached_params.linear):
+            if not self.no_cache and params.linear_options == self._cached_params.linear_options:
+                # The y, x, and linear_options are the same, which means the pruning_alpha is different.
+                # We prune the weights in-place, and the pruning_alpha is sorted in decreasing order.
+                # Therefore, we must divide by the previous pruning_alpha.
+                previous_alpha = self._cached_params.linear.pruning_alpha
+                pruning_alpha /= previous_alpha
+                logging.info(f"Model  - Pruning: {linear_params}, alpha: {pruning_alpha}")
+                self._cached_model.flat_model = pruning_flat_model(self._cached_model.flat_model, pruning_alpha)
+            else:
+                logging.info(f"Model  - Training: {linear_params}")
+                with __silent__():
+                    self._cached_model = linear.train_tree(
+                        y,
+                        x,
+                        root=root,
+                        options=params.linear_options,
+                        pruning_alpha=pruning_alpha
+                        )
+
+            self._cached_params.linear = linear_params
         else:
             logging.info(f"Model  - Using cached data: {linear_params}")
 
@@ -237,7 +278,7 @@ class GridSearch:
         self.search_space = sorted([
             GridParameter(dict(zip(param_names, param_values)))
             for param_values in itertools.product(*search_space_dict.values())
-        ])
+        ], reverse=True)
 
         permutation = np.random.permutation(self.num_instances)
         index_per_fold = [
