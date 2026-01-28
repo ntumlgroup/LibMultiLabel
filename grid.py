@@ -122,7 +122,7 @@ def pruning_flat_model(flat_model: linear.FlatModel, pruning_alpha: float) -> np
 
     for i in range(num_classes):
         weight = flat_model.weights[:, i].toarray().ravel()
-        weights.append(sparse.csc_matrix(_pruning_weights(weight, pruning_alpha)))
+        weights.append(sparse.csc_matrix(_pruning_weights(weight, pruning_alpha)[:, None]))
 
     flat_model.weights = sparse.hstack(weights, "csc")
     return flat_model
