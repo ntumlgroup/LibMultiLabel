@@ -295,7 +295,13 @@ def main():
     retrain = True
     n_folds = 3
     monitor_metrics = ["P@1", "P@3", "P@5"]
-    search_space_dict = {"max_features": [10000]}
+    search_space_dict = {
+        "max_features": [10000, 20000, 100000],
+        "K": [10, 50, 100],
+        "min_df": [1, 2],
+        "prob_A": [2, 3, 4],
+        "c": [0.1, 0.2, 1, 10],
+    }
 
     search = GridSearch(dataset, n_folds, monitor_metrics)
     cv_scores = search(search_space_dict)
