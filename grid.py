@@ -4,14 +4,15 @@ from typing import Callable
 import os
 import sys
 import itertools
+import argparse
 import logging
 
 import libmultilabel.linear as linear
 from libmultilabel.linear.tree import _build_tree
+from libmultilabel.common_utils import timer
 
 import sklearn.preprocessing
 import numpy as np
-import scipy.sparse as sparse
 import math
 
 
@@ -273,3 +274,67 @@ class GridSearch:
                     )
 
         return {params: metrics.compute() for params, metrics in self.param_metrics.items()}
+
+
+@timer
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--seed",
+        type=int,
+        help="Random seed."
+    )
+    parser.add_argument(
+        "--training_file",
+        help="Path to training data."
+    )
+    parser.add_argument(
+        "--test_file",
+        help="Path to test data."
+    )
+    parser.add_argument(
+        "--data_format",
+        type=str,
+        default="txt",
+        help="'svm' for SVM format or 'txt' for LibMultiLabel format."
+    )
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
+    if args.seed is not None:
+        np.random.seed(args.seed)
+
+    dataset = linear.load_dataset(
+        args.data_format,
+        args.training_file,
+        args.test_file,
+    )
+
+    retrain = True
+    n_folds = 3
+    monitor_metrics = ["P@1", "P@3", "P@5"]
+    search_space_dict = {
+        'max_features': [10000]
+    }
+
+    search = GridSearch(dataset, n_folds, monitor_metrics)
+    cv_scores = search(search_space_dict)
+    sorted_cv_scores = sorted(cv_scores.items(), key=lambda x: x[1][monitor_metrics[0]], reverse=True)
+    print(sorted_cv_scores)
+
+    if retrain:
+        best_params, best_cv_scores = list(sorted_cv_scores)[0]
+        print(best_params, best_cv_scores)
+
+        preprocessor = linear.Preprocessor(tfidf_params=asdict(best_params.tfidf))
+        transformed_dataset = preprocessor.fit_transform(dataset)
+        model = linear.train_tree(
+                    transformed_dataset["train"]["y"],
+                    transformed_dataset["train"]["x"],
+                    best_params.linear_options,
+                    **asdict(best_params.tree),
+                )
+
+
+if __name__ == "__main__":
+    main()
