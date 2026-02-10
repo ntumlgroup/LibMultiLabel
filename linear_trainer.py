@@ -67,7 +67,6 @@ def linear_train(datasets, config):
                 options=config.liblinear_options,
                 K=config.tree_degree,
                 dmax=config.tree_max_depth,
-                pruning_alpha=config.pruning_alpha,
             )
     else:
         model = LINEAR_TECHNIQUES[config.linear_technique](

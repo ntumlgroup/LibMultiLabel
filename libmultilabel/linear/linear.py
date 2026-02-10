@@ -92,37 +92,6 @@ class FlatModel:
             return np.asarray(matrix)
 
 
-def _pruning_weights(weights: np.ndarray, pruning_alpha: float) -> np.ndarray:
-    """Prune the weights of the linear model.
-
-    Args:
-        weights (np.ndarray): Linear model weights.
-        pruning_alpha (float): Fraction of weights to keep after pruning.
-
-    Returns:
-        np.ndarray: The pruned weights.
-    """
-    pruning_ratio = 1-pruning_alpha
-
-    if 0 >= pruning_ratio:
-        return weights
-    elif pruning_ratio >= 1:
-        return np.zeros_like(weights)
-    else:
-        # Perform pruning algorithm
-        # Reduce the number of nonzero features per column by a factor of pruning_ratio.
-        nonzero_indices = np.flatnonzero(weights)
-        num_nonzeros = nonzero_indices.size
-        # Threshold
-        k = np.clip(int(pruning_ratio * num_nonzeros), 0, num_nonzeros)
-        k_nonzero_indices = np.argpartition(np.abs(weights[nonzero_indices]), kth=k-1)[:k]
-
-        pruned_indices = nonzero_indices[k_nonzero_indices]
-        weights[pruned_indices] = 0
-
-        return weights
-
-
 class ParallelOVRTrainer(threading.Thread):
     """A trainer for parallel 1vsrest training."""
 
@@ -134,7 +103,6 @@ class ParallelOVRTrainer(threading.Thread):
     weights: np.ndarray
     pbar: tqdm
     queue: queue.SimpleQueue
-    pruning_alpha: float
 
     def __init__(self):
         threading.Thread.__init__(self)
@@ -146,7 +114,6 @@ class ParallelOVRTrainer(threading.Thread):
         x: sparse.csr_matrix,
         options: str,
         verbose: bool,
-        pruning_alpha: float,
     ):
         """Initialize the parallel trainer by setting y, x, parameter and threading related
         variables as class variables of ParallelOVRTrainer.
@@ -156,13 +123,11 @@ class ParallelOVRTrainer(threading.Thread):
             x (sparse.csr_matrix): A matrix with dimensions number of instances * number of features.
             options (str): The option string passed to liblinear.
             verbose (bool): Output extra progress information.
-            pruning_alpha (float): Fraction of weights to keep after pruning.
         """
         x, options, bias = _prepare_options(x, options)
         cls.y = y.tocsc()
         cls.x = x
         cls.bias = bias
-        cls.pruning_alpha = pruning_alpha
         num_instances, num_classes = cls.y.shape
         num_features = cls.x.shape[1]
         cls.prob = problem(np.ones((num_instances,)), cls.x)
@@ -221,7 +186,7 @@ class ParallelOVRTrainer(threading.Thread):
             except queue.Empty:
                 break
             yi = self.y[:, label_idx].toarray().reshape(-1)
-            self.weights[:, label_idx] = _pruning_weights(self._do_parallel_train(2 * yi - 1).ravel(), self.pruning_alpha)
+            self.weights[:, label_idx] = self._do_parallel_train(2 * yi - 1).ravel()
 
             self.pbar.update()
 
@@ -232,7 +197,6 @@ def train_1vsrest(
     multiclass: bool = False,
     options: str = "",
     verbose: bool = True,
-    pruning_alpha: float = 1.0,
 ) -> FlatModel:
     """Train a linear model parallel on labels for multi-label data using a one-vs-rest strategy.
 
@@ -242,13 +206,12 @@ def train_1vsrest(
         multiclass (bool, optional): A flag indicating if the dataset is multiclass.
         options (str, optional): The option string passed to liblinear. Defaults to ''.
         verbose (bool, optional): Output extra progress information. Defaults to True.
-        pruning_alpha (float, optional): Fraction of weights to keep after pruning. Defaults to 1.0 (no pruning).
 
     Returns:
         A model which can be used in predict_values.
     """
     # Follows the MATLAB implementation at https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/multilabel/
-    ParallelOVRTrainer.init_trainer(y, x, options, verbose, pruning_alpha)
+    ParallelOVRTrainer.init_trainer(y, x, options, verbose)
     num_threads = psutil.cpu_count(logical=False)
     trainers = [ParallelOVRTrainer() for _ in range(num_threads)]
     for trainer in trainers:
