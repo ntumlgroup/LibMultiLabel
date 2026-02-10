@@ -11,21 +11,50 @@ from libmultilabel.logging import add_stream_handler, add_collect_handler
 
 
 def add_all_arguments(parser):
-    # path / directory
+
     parser.add_argument(
-        "--result_dir", default="./runs", help="The directory to save checkpoints and logs (default: %(default)s)"
+        "-h",
+        "--help",
+        action="help",
+        help="Quickstart: https://www.csie.ntu.edu.tw/~cjlin/libmultilabel/cli/quickstart.html",
     )
 
+    parser.add_argument("--seed", type=int, help="Random seed (default: %(default)s)")
+
+    # choose model (linear / nn)
+    parser.add_argument("--linear", action="store_true", help="Train linear model")
+
+    # others
+    parser.add_argument("--cpu", action="store_true", help="Disable CUDA")
+    parser.add_argument("--silent", action="store_true", help="Enable silent mode")
+    parser.add_argument(
+        "--data_workers", type=int, default=4, help="Use multi-cpu core for data pre-processing (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--embed_cache_dir",
+        type=str,
+        help="For parameter search only: path to a directory for storing embeddings for multiple runs. (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--eval", action="store_true", help="Only run evaluation on the test set (default: %(default)s)"
+    )
+    parser.add_argument("--checkpoint_path", help="The checkpoint to warm-up with (default: %(default)s)")
+
     # data
-    parser.add_argument("--data_name", default="unnamed_data", help="Dataset name (default: %(default)s)")
+    parser.add_argument(
+        "--data_name",
+        default="unnamed_data",
+        help="Dataset name for generating the output directory (default: %(default)s)",
+    )
     parser.add_argument("--training_file", help="Path to training data (default: %(default)s)")
     parser.add_argument("--val_file", help="Path to validation data (default: %(default)s)")
-    parser.add_argument("--test_file", help="Path to test data (default: %(default)s")
+    parser.add_argument("--test_file", help="Path to test data (default: %(default)s)")
+    parser.add_argument("--label_file", type=str, help="Path to a file holding all labels (default: %(default)s)")
     parser.add_argument(
         "--val_size",
         type=float,
         default=0.2,
-        help="Training-validation split: a ratio in [0, 1] or an integer for the size of the validation set (default: %(default)s).",
+        help="Training-validation split: a ratio in [0, 1] or an integer for the size of the validation set (default: %(default)s)",
     )
     parser.add_argument(
         "--min_vocab_freq",
@@ -67,8 +96,24 @@ def add_all_arguments(parser):
         help="Whether to add the special tokens for inputs of the transformer-based language model. (default: %(default)s)",
     )
 
+    # model
+    parser.add_argument("--model_name", default="unnamed_model", help="Model to be used (default: %(default)s)")
+    parser.add_argument(
+        "--init_weight", default="kaiming_uniform", help="Weight initialization to be used (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--loss_function", default="binary_cross_entropy_with_logits", help="Loss function (default: %(default)s)"
+    )
+
+    # pretrained vocab / embeddings
+    parser.add_argument("--vocab_file", type=str, help="Path to a file holding vocabuaries (default: %(default)s)")
+    parser.add_argument(
+        "--embed_file",
+        type=str,
+        help="Path to a file holding pre-trained embeddings or the name of the pretrained GloVe embedding (default: %(default)s)",
+    )
+
     # train
-    parser.add_argument("--seed", type=int, help="Random seed (default: %(default)s)")
     parser.add_argument(
         "--epochs", type=int, default=10000, help="The number of epochs to train (default: %(default)s)"
     )
@@ -109,15 +154,6 @@ def add_all_arguments(parser):
         help="Whether the embeddings of each word is normalized to a unit vector (default: %(default)s)",
     )
 
-    # model
-    parser.add_argument("--model_name", default="unnamed_model", help="Model to be used (default: %(default)s)")
-    parser.add_argument(
-        "--init_weight", default="kaiming_uniform", help="Weight initialization to be used (default: %(default)s)"
-    )
-    parser.add_argument(
-        "--loss_function", default="binary_cross_entropy_with_logits", help="Loss function (default: %(default)s)"
-    )
-
     # eval
     parser.add_argument(
         "--eval_batch_size", type=int, default=256, help="Size of evaluating batches (default: %(default)s)"
@@ -136,28 +172,6 @@ def add_all_arguments(parser):
     )
     parser.add_argument(
         "--val_metric", default="P@1", help="The metric to select the best model for testing (default: %(default)s)"
-    )
-
-    # pretrained vocab / embeddings
-    parser.add_argument("--vocab_file", type=str, help="Path to a file holding vocabuaries (default: %(default)s)")
-    parser.add_argument(
-        "--embed_file", type=str, help="Path to a file holding pre-trained embeddings or the name of the pretrained GloVe embedding (default: %(default)s)"
-    )
-    parser.add_argument("--label_file", type=str, help="Path to a file holding all labels (default: %(default)s)")
-
-    # log
-    parser.add_argument(
-        "--save_k_predictions",
-        type=int,
-        nargs="?",
-        const=100,
-        default=0,
-        help="Save top k predictions on test set. k=%(const)s if not specified. (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--predict_out_path",
-        default="./predictions.txt",
-        help="Path to the output file holding label results (default: %(default)s)",
     )
 
     # auto-test
@@ -180,24 +194,27 @@ def add_all_arguments(parser):
         help="Percentage of test dataset to use for auto-testing (default: %(default)s)",
     )
 
-    # others
-    parser.add_argument("--cpu", action="store_true", help="Disable CUDA")
-    parser.add_argument("--silent", action="store_true", help="Enable silent mode")
+    # log
     parser.add_argument(
-        "--data_workers", type=int, default=4, help="Use multi-cpu core for data pre-processing (default: %(default)s)"
+        "--save_k_predictions",
+        type=int,
+        nargs="?",
+        const=100,
+        default=0,
+        help="Save top k predictions on test set. k=%(const)s if not specified. (default: %(default)s)",
     )
     parser.add_argument(
-        "--embed_cache_dir",
-        type=str,
-        help="For parameter search only: path to a directory for storing embeddings for multiple runs. (default: %(default)s)",
+        "--predict_out_path",
+        default="./predictions.txt",
+        help="Path to the output file holding label results (default: %(default)s)",
     )
+
+    # path / directory
     parser.add_argument(
-        "--eval", action="store_true", help="Only run evaluation on the test set (default: %(default)s)"
+        "--result_dir", default="./runs", help="The directory to save checkpoints and logs (default: %(default)s)"
     )
-    parser.add_argument("--checkpoint_path", help="The checkpoint to warm-up with (default: %(default)s)")
 
     # linear options
-    parser.add_argument("--linear", action="store_true", help="Train linear model")
     parser.add_argument(
         "--data_format",
         type=str,
@@ -224,7 +241,10 @@ def add_all_arguments(parser):
         "--tree_max_depth", type=int, default=10, help="Maximum depth of the tree (default: %(default)s)"
     )
     parser.add_argument(
-        "--tree_ensemble_models", type=int, default=1, help="Number of models in the tree ensemble (default: %(default)s)"
+        "--tree_ensemble_models",
+        type=int,
+        default=1,
+        help="Number of models in the tree ensemble (default: %(default)s)",
     )
     parser.add_argument(
         "--beam_width",
@@ -244,13 +264,6 @@ def add_all_arguments(parser):
         type=int,
         default=8,
         help="the maximal number of labels inside a cluster (default: %(default)s)",
-    )
-    parser.add_argument(
-        "-h",
-        "--help",
-        action="help",
-        help="If you are trying to specify network config such as dropout or activation or config of the learning rate scheduler, use a yaml file instead. "
-        "See example configs in example_config",
     )
 
 
