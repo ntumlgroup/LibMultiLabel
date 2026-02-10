@@ -44,20 +44,20 @@ class GridParameter:
         ("stop_words", str | list, field(default=None)),
         ("strip_accents", str | Callable, field(default=None)),
         ("tokenizer", Callable, field(default=None)),
-        ]
+    ]
     _tree_fields = [
         ("dmax", int, field(default=10)),
         ("K", int, field(default=8)),
-        ]
+    ]
     _linear_fields = [
         ("s", int, field(default=1)),
         ("c", float, field(default=1)),
         ("B", int, field(default=-1)),
-        ]
+    ]
     _predict_fields = [
         ("beam_width", int, field(default=10)),
         ("prob_A", int, field(default=3)),
-        ]
+    ]
 
     param_types = {
         "tfidf": make_dataclass("TfidfParams", _tfidf_fields, frozen=True, order=True),
@@ -66,8 +66,7 @@ class GridParameter:
         "predict": make_dataclass("PredictParams", _predict_fields, frozen=True, order=True),
     }
     _param_field_names = {
-        param_type: {f.name for f in fields(class_name)}
-        for param_type, class_name in param_types.items()
+        param_type: {f.name for f in fields(class_name)} for param_type, class_name in param_types.items()
     }
 
     def __init__(self, params: dict | None = None, fold: int = -1):
@@ -85,7 +84,7 @@ class GridParameter:
     @property
     def linear_options(self):
         options = ""
-        for field_name in self._param_field_names['linear']:
+        for field_name in self._param_field_names["linear"]:
             options += f" -{field_name} {getattr(self.linear, field_name)}"
         return options.strip()
 
@@ -139,12 +138,12 @@ class GridSearch:
             "data_format": self.datasets["data_format"],
             "train": {
                 "y": take(self.datasets["train"]["y"], train_idx),
-                "x": take(self.datasets["train"]["x"], train_idx)
+                "x": take(self.datasets["train"]["x"], train_idx),
             },
             "test": {
                 "y": take(self.datasets["train"]["y"], valid_idx),
-                "x": take(self.datasets["train"]["x"], valid_idx)
-            }
+                "x": take(self.datasets["train"]["x"], valid_idx),
+            },
         }
 
     def get_transformed_dataset(self, dataset, params):
@@ -158,11 +157,11 @@ class GridSearch:
             dict[str, np.matrix]: The keys should be "y" and "x".
         """
         tfidf_params = params.tfidf
-        self.no_cache = (tfidf_params != self._cached_params.tfidf)
+        self.no_cache = tfidf_params != self._cached_params.tfidf
         if self.no_cache:
             logging.info(f"TFIDF  - Preprocessing: {tfidf_params}")
             if self.datasets["data_format"] not in {"txt", "dataframe"}:
-                logging.info('The TF-IDF parameters are only meaningful for the “txt” and “dataframe” data formats.')
+                logging.info("The TF-IDF parameters are only meaningful for the “txt” and “dataframe” data formats.")
             with __silent__():
                 preprocessor = linear.Preprocessor(tfidf_params=asdict(tfidf_params))
                 self._cached_params.tfidf = tfidf_params
@@ -174,14 +173,16 @@ class GridSearch:
 
     def get_tree_root(self, y, x, params):
         tree_params = params.tree
-        self.no_cache |= (tree_params != self._cached_params.tree)
+        self.no_cache |= tree_params != self._cached_params.tree
         if self.no_cache:
             logging.info(f"Tree   - Preprocessing: {tree_params}")
             with __silent__():
                 label_representation = (y.T * x).tocsr()
                 label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
                 self._cached_params.tree = tree_params
-                self._cached_tree_root = _build_tree(label_representation, np.arange(y.shape[1]), 0, **asdict(tree_params))
+                self._cached_tree_root = _build_tree(
+                    label_representation, np.arange(y.shape[1]), 0, **asdict(tree_params)
+                )
                 self._cached_tree_root.is_root = True
         else:
             logging.info(f"Tree   - Using cached data: {tree_params}")
@@ -213,7 +214,7 @@ class GridSearch:
                     x,
                     root=root,
                     options=params.linear_options,
-                    )
+                )
         else:
             logging.info(f"Model  - Using cached data: {linear_params}")
 
@@ -230,9 +231,7 @@ class GridSearch:
             self.param_metrics[params] = linear.get_metrics(self.monitor_metrics, num_classes=y.shape[1])
 
         for i in range(num_batches):
-            preds = model.predict_values(
-                x[i * batch_size : (i + 1) * batch_size],
-                **asdict(params.predict))
+            preds = model.predict_values(x[i * batch_size : (i + 1) * batch_size], **asdict(params.predict))
             target = y[i * batch_size : (i + 1) * batch_size].toarray()
             self.param_metrics[params].update(preds, target)
 
@@ -240,19 +239,24 @@ class GridSearch:
         self.param_metrics.clear()
 
         param_names = search_space_dict.keys()
-        self.search_space = sorted([
-            GridParameter(dict(zip(param_names, param_values)))
-            for param_values in itertools.product(*search_space_dict.values())
-        ], reverse=True)
+        self.search_space = sorted(
+            [
+                GridParameter(dict(zip(param_names, param_values)))
+                for param_values in itertools.product(*search_space_dict.values())
+            ],
+            reverse=True,
+        )
 
         permutation = np.random.permutation(self.num_instances)
         index_per_fold = [
-            permutation[int(fold * self.num_instances / self.n_folds):int((fold+1) * self.num_instances / self.n_folds)]
+            permutation[
+                int(fold * self.num_instances / self.n_folds) : int((fold + 1) * self.num_instances / self.n_folds)
+            ]
             for fold in range(self.n_folds)
         ]
 
         for fold in range(self.n_folds):
-            train_idx = np.concatenate(index_per_fold[:fold] + index_per_fold[fold+1:])
+            train_idx = np.concatenate(index_per_fold[:fold] + index_per_fold[fold + 1 :])
             valid_idx = index_per_fold[fold]
             fold_dataset = self.get_fold_dataset(train_idx, valid_idx)
 
@@ -261,17 +265,8 @@ class GridSearch:
                 logging.info(f"Status - Running fold {fold}, params: {params}")
 
                 transformed_dataset = self.get_transformed_dataset(fold_dataset, params)
-                model = self.get_model(
-                    transformed_dataset["train"]["y"],
-                    transformed_dataset["train"]["x"],
-                    params
-                    )
-                self.compute_scores(
-                    transformed_dataset["test"]["y"],
-                    transformed_dataset["test"]["x"],
-                    model,
-                    params
-                    )
+                model = self.get_model(transformed_dataset["train"]["y"], transformed_dataset["train"]["x"], params)
+                self.compute_scores(transformed_dataset["test"]["y"], transformed_dataset["test"]["x"], model, params)
 
         return {params: metrics.compute() for params, metrics in self.param_metrics.items()}
 
@@ -279,24 +274,11 @@ class GridSearch:
 @timer
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", type=int, help="Random seed.")
+    parser.add_argument("--training_file", help="Path to training data.")
+    parser.add_argument("--test_file", help="Path to test data.")
     parser.add_argument(
-        "--seed",
-        type=int,
-        help="Random seed."
-    )
-    parser.add_argument(
-        "--training_file",
-        help="Path to training data."
-    )
-    parser.add_argument(
-        "--test_file",
-        help="Path to test data."
-    )
-    parser.add_argument(
-        "--data_format",
-        type=str,
-        default="txt",
-        help="'svm' for SVM format or 'txt' for LibMultiLabel format."
+        "--data_format", type=str, default="txt", help="'svm' for SVM format or 'txt' for LibMultiLabel format."
     )
     args = parser.parse_args()
 
@@ -313,9 +295,7 @@ def main():
     retrain = True
     n_folds = 3
     monitor_metrics = ["P@1", "P@3", "P@5"]
-    search_space_dict = {
-        'max_features': [10000]
-    }
+    search_space_dict = {"max_features": [10000]}
 
     search = GridSearch(dataset, n_folds, monitor_metrics)
     cv_scores = search(search_space_dict)
@@ -329,11 +309,11 @@ def main():
         preprocessor = linear.Preprocessor(tfidf_params=asdict(best_params.tfidf))
         transformed_dataset = preprocessor.fit_transform(dataset)
         model = linear.train_tree(
-                    transformed_dataset["train"]["y"],
-                    transformed_dataset["train"]["x"],
-                    best_params.linear_options,
-                    **asdict(best_params.tree),
-                )
+            transformed_dataset["train"]["y"],
+            transformed_dataset["train"]["x"],
+            best_params.linear_options,
+            **asdict(best_params.tree),
+        )
 
 
 if __name__ == "__main__":

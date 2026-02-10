@@ -306,7 +306,7 @@ def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, 
             kmeans_algo = LloydKmeans
 
         kmeans = kmeans_algo(
-            n_clusters=K, max_iter=300, tol=0.0001, random_state=np.random.randint(2**31 - 1), verbose=False
+            n_clusters=K, max_iter=300, tol=0.0001, random_state=np.random.randint(2**31 - 1), verbose=True
         )
         metalabels = kmeans.fit(label_representation)
 
