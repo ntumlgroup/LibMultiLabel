@@ -34,7 +34,7 @@ class BERT(nn.Module):
             hidden_dropout_prob=encoder_hidden_dropout,
             attention_probs_dropout_prob=encoder_attention_dropout,
             classifier_dropout=post_encoder_dropout,
-            torchscript=True,
+            # torchscript=True,
         )
 
     def forward(self, input):
