@@ -1,9 +1,9 @@
 name: Basic Test
 
 on:
-  pull_request:
+  push:
     branches:
-      - master
+      - fix_wf
 
 jobs:
   test:
