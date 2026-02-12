@@ -40,7 +40,7 @@ class BERTAttention(nn.Module):
 
         self.lm = AutoModel.from_pretrained(
             lm_weight,
-            torchscript=True,
+            # torchscript=True,
             hidden_dropout_prob=encoder_hidden_dropout,
             attention_probs_dropout_prob=encoder_attention_dropout,
         )
