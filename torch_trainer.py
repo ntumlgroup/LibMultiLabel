@@ -150,7 +150,7 @@ class TorchTrainer:
 
         if checkpoint_path is not None:
             logging.info(f"Loading model from `{checkpoint_path}` with the previously saved hyper-parameter...")
-            self.model = Model.load_from_checkpoint(checkpoint_path, log_path=log_path)
+            self.model = Model.load_from_checkpoint(checkpoint_path, log_path=log_path, weights_only=False)
             word_dict_path = os.path.join(os.path.dirname(checkpoint_path), self.WORD_DICT_NAME)
             if os.path.exists(word_dict_path):
                 with open(word_dict_path, "rb") as f:

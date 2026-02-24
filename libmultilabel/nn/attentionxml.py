@@ -287,7 +287,7 @@ class PLTTrainer:
             logger.info(f"Finish training level 0")
 
         logger.info(f"Best model loaded from {best_model_path}")
-        model_0 = Model.load_from_checkpoint(best_model_path)
+        model_0 = Model.load_from_checkpoint(best_model_path, weights_only=False)
 
         logger.info(
             f"Predicting clusters by level-0 model. We then select {self.beam_width} clusters for each instance and "
@@ -422,11 +422,13 @@ class PLTTrainer:
         model_0 = Model.load_from_checkpoint(
             self.get_best_model_path(level=0),
             save_k_predictions=self.beam_width,
+            weights_only=False,
         )
         model_1 = PLTModel.load_from_checkpoint(
             self.get_best_model_path(level=1),
             save_k_predictions=self.save_k_predictions,
             metrics=self.metrics,
+            weights_only=False,
         )
 
         word_dict_path = os.path.join(os.path.dirname(self.get_best_model_path(level=1)), self.WORD_DICT_NAME)
