@@ -4,6 +4,7 @@ from typing import Callable
 
 import numpy as np
 import scipy.sparse as sparse
+from scipy.special import log_expit
 from sparsekmeans import LloydKmeans, ElkanKmeans
 import sklearn.preprocessing
 from tqdm import tqdm
@@ -58,16 +59,31 @@ class TreeModel:
         self.multiclass = False
         self._model_separated = False # Indicates whether the model has been separated for pruning tree.
 
+    def sigmoid_A(self, x: np.ndarray, prob_A: int):
+        """
+        Calculate log(sigmoid(prob_A * x)).
+
+        Args:
+            x (np.ndarray): The decision value matrix with dimension number of instances * number of classes.
+            prob_A (int): The hyperparameter used in the probability estimation function: sigmoid(prob_A * x).
+
+        Returns:
+            np.ndarray: A matrix with dimension number of instances * number of classes.
+        """
+        return log_expit(prob_A * x)
+
     def predict_values(
         self,
         x: sparse.csr_matrix,
         beam_width: int = 10,
+        prob_A: int = 3,
     ) -> np.ndarray:
         """Calculate the probability estimates associated with x.
 
         Args:
             x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
-            beam_width (int, optional): Number of candidates considered during beam search. Defaults to 10.
+            beam_width (int, optional): Number of candidates considered during beam search.
+            prob_A (int): The hyperparameter used in the probability estimation function: sigmoid(prob_A * decision_value_matrix).
 
         Returns:
             np.ndarray: A matrix with dimension number of instances * number of classes.
@@ -81,8 +97,8 @@ class TreeModel:
             if not self._model_separated:
                 self._separate_model_for_pruning_tree()
                 self._model_separated = True
-            all_preds = self._prune_tree_and_predict_values(x, beam_width) # number of instances * (number of labels + total number of metalabels)
-        return np.vstack([self._beam_search(all_preds[i], beam_width) for i in range(all_preds.shape[0])])
+            all_preds = self._prune_tree_and_predict_values(x, beam_width, prob_A) # number of instances * (number of labels + total number of metalabels)
+        return np.vstack([self._beam_search(all_preds[i], beam_width, prob_A) for i in range(all_preds.shape[0])])
 
     def _separate_model_for_pruning_tree(self):
         """
@@ -113,7 +129,7 @@ class TreeModel:
             )
             self.subtree_models.append(subtree_flatmodel)
         
-    def _prune_tree_and_predict_values(self, x: sparse.csr_matrix, beam_width: int) -> np.ndarray:
+    def _prune_tree_and_predict_values(self, x: sparse.csr_matrix, beam_width: int, prob_A: int) -> np.ndarray:
         """Calculates the selective decision values associated with instances x by evaluating only the most relevant subtrees.
 
         Only subtrees corresponding to the top beam_width candidates from the root are evaluated,
@@ -122,6 +138,7 @@ class TreeModel:
         Args:
             x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
             beam_width (int): Number of top candidate branches considered for prediction.
+            prob_A (int): The hyperparameter used in the probability estimation function: sigmoid(prob_A * decision_value_matrix).
 
         Returns:
             np.ndarray: A matrix with dimension number of instances * (number of labels + total number of metalabels).
@@ -132,7 +149,7 @@ class TreeModel:
 
         # Calculate root decision values and scores
         root_preds = linear.predict_values(self.root_model, x)
-        children_scores = 0.0 - np.square(np.maximum(0, 1 - root_preds))
+        children_scores = 0.0 + self.sigmoid_A(root_preds, prob_A)
 
         slice = np.s_[:, self.node_ptr[self.root.index] : self.node_ptr[self.root.index + 1]]
         all_preds[slice] = root_preds
@@ -159,12 +176,13 @@ class TreeModel:
 
         return all_preds
 
-    def _beam_search(self, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
+    def _beam_search(self, instance_preds: np.ndarray, beam_width: int, prob_A: int) -> np.ndarray:
         """Predict with beam search using cached probability estimates for a single instance.
 
         Args:
             instance_preds (np.ndarray): A vector of cached probability estimates of each node, has dimension number of labels + total number of metalabels.
             beam_width (int): Number of candidates considered.
+            prob_A (int, optional): The tunable parameter of probability estimation function, that is sigmoid(prob_A * preds).
 
         Returns:
             np.ndarray: A vector with dimension number of classes.
@@ -182,7 +200,7 @@ class TreeModel:
                     continue
                 slice = np.s_[self.node_ptr[node.index] : self.node_ptr[node.index + 1]]
                 pred = instance_preds[slice]
-                children_score = score - np.square(np.maximum(0, 1 - pred))
+                children_score = score + self.sigmoid_A(pred, prob_A)
                 next_level.extend(zip(node.children, children_score.tolist()))
 
             cur_level = sorted(next_level, key=lambda pair: -pair[1])[:beam_width]
@@ -193,7 +211,7 @@ class TreeModel:
         for node, score in cur_level:
             slice = np.s_[self.node_ptr[node.index] : self.node_ptr[node.index + 1]]
             pred = instance_preds[slice]
-            scores[node.label_map] = np.exp(score - np.square(np.maximum(0, 1 - pred)))
+            scores[node.label_map] = np.exp(score + self.sigmoid_A(pred, prob_A))
         return scores
 
 
@@ -204,6 +222,7 @@ def train_tree(
     K=DEFAULT_K,
     dmax=DEFAULT_DMAX,
     verbose: bool = True,
+    root: Node = None,
 ) -> TreeModel:
     """Train a linear model for multi-label data using a divide-and-conquer strategy.
     The algorithm used is based on https://github.com/xmc-aalto/bonsai.
@@ -215,14 +234,16 @@ def train_tree(
         K (int, optional): Maximum degree of nodes in the tree. Defaults to 100.
         dmax (int, optional): Maximum depth of the tree. Defaults to 10.
         verbose (bool, optional): Output extra progress information. Defaults to True.
+        root (Node, optional): Pre-built tree root. Defaults to None.
 
     Returns:
         TreeModel: A model which can be used in predict_values.
     """
-    label_representation = (y.T * x).tocsr()
-    label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
-    root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
-    root.is_root = True
+    if root is None:
+        label_representation = (y.T * x).tocsr()
+        label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
+        root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
+        root.is_root = True
 
     num_nodes = 0
     # Both type(x) and type(y) are sparse.csr_matrix
