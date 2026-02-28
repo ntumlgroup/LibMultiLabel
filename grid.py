@@ -114,7 +114,6 @@ class GridSearch:
         self.datasets = datasets
         self.n_folds = n_folds
         self.monitor_metrics = monitor_metrics
-        self.param_metrics = dict()
 
         self._cached_params = GridParameter()
         for param_type in self._cached_params.param_types:
@@ -148,7 +147,8 @@ class GridSearch:
 
     def get_transformed_dataset(self, dataset, params):
         """
-        Get the dataset for the given tf-idf params.
+        Get and cache the dataset for the given tf-idf params.
+        If the params is cached, it returns the cached dataset directly without computation. (no it)
 
         Args:
             params (GridParameter): The params to build the dataset.
@@ -161,7 +161,8 @@ class GridSearch:
         if self.no_cache:
             logging.info(f"TFIDF  - Preprocessing: {tfidf_params}")
             if self.datasets["data_format"] not in {"txt", "dataframe"}:
-                logging.info("The TF-IDF parameters are only meaningful for the “txt” and “dataframe” data formats.")
+                logging.info("If the data format is not 'txt' or 'dataframe', the data will not effect by the TF-IDF parameters."
+                             "otherwise the config...")
             with __silent__():
                 preprocessor = linear.Preprocessor(tfidf_params=asdict(tfidf_params))
                 self._cached_params.tfidf = tfidf_params
@@ -171,7 +172,7 @@ class GridSearch:
 
         return self._cached_transformed_dataset
 
-    def get_tree_root(self, y, x, params):
+    def get_tree(self, y, x, params):
         tree_params = params.tree
         self.no_cache |= tree_params != self._cached_params.tree
         if self.no_cache:
@@ -191,7 +192,8 @@ class GridSearch:
 
     def get_model(self, y, x, params):
         """
-        Get the model for the given params.
+        Get and cache the model for the given params.
+        If the params is cached, it returns the cached model directly without computation.
 
         Args:
             y (np.matrix): The labels of the training data.
@@ -201,7 +203,7 @@ class GridSearch:
         Returns:
             linear.FlatModel | linear.TreeModel: The model for the given params.
         """
-        root = self.get_tree_root(y, x, params)
+        root = self.get_tree(y, x, params)
 
         linear_params = params.linear
 
@@ -227,17 +229,12 @@ class GridSearch:
         num_instances = x.shape[0]
         num_batches = math.ceil(num_instances / batch_size)
 
-        if params not in self.param_metrics.keys():
-            self.param_metrics[params] = linear.get_metrics(self.monitor_metrics, num_classes=y.shape[1])
-
         for i in range(num_batches):
             preds = model.predict_values(x[i * batch_size : (i + 1) * batch_size], **asdict(params.predict))
             target = y[i * batch_size : (i + 1) * batch_size].toarray()
             self.param_metrics[params].update(preds, target)
 
     def __call__(self, search_space_dict: dict[str, list]) -> dict[GridParameter, dict[str, float]]:
-        self.param_metrics.clear()
-
         param_names = search_space_dict.keys()
         self.search_space = sorted(
             [
@@ -247,13 +244,18 @@ class GridSearch:
             reverse=True,
         )
 
+        self.param_metrics = {
+            params: linear.get_metrics(self.monitor_metrics, num_classes=-1)
+            for params in self.search_space
+        }
+
         permutation = np.random.permutation(self.num_instances)
-        index_per_fold = [
-            permutation[
+        index_per_fold = []
+        for fold in range(self.n_folds):
+            index = permutation[
                 int(fold * self.num_instances / self.n_folds) : int((fold + 1) * self.num_instances / self.n_folds)
-            ]
-            for fold in range(self.n_folds)
-        ]
+                ]
+            index_per_fold.append(index)
 
         for fold in range(self.n_folds):
             train_idx = np.concatenate(index_per_fold[:fold] + index_per_fold[fold + 1 :])
@@ -291,16 +293,19 @@ def main():
         args.training_file,
         args.test_file,
     )
+    L = len(dataset["train"]["y"])
 
     retrain = True
     n_folds = 3
+    dmax = 10
     monitor_metrics = ["P@1", "P@3", "P@5"]
     search_space_dict = {
-        "max_features": [10000, 20000, 100000],
-        "K": [10, 50, 100],
-        "min_df": [1, 2],
-        "prob_A": [2, 3, 4],
-        "c": [0.1, 0.2, 1, 10],
+        "c": [0.5, 1, 2],
+        "ngram_range": [(1, 1), (1, 2), (1, 3)],
+        "stop_words": ["english"],
+        "dmax": [dmax],
+        "K": [np.round(np.power(L, 1/dmax) * np.power(2, alpha) + 0.5).astype(int) for alpha in [-2, 5]],
+        "beam_width": [4, 10, 128],
     }
 
     search = GridSearch(dataset, n_folds, monitor_metrics)
