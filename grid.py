@@ -59,6 +59,8 @@ class GridParameter:
         ("prob_A", int, field(default=3)),
     ]
 
+    # set frozen=True to make instances hashable.
+    # set order=True to enable comparison operations.
     param_types = {
         "tfidf": make_dataclass("TfidfParams", _tfidf_fields, frozen=True, order=True),
         "tree": make_dataclass("TreeParams", _tree_fields, frozen=True, order=True),
@@ -88,19 +90,19 @@ class GridParameter:
             options += f" -{field_name} {getattr(self.linear, field_name)}"
         return options.strip()
 
-    def __repr__(self):
+    def __repr__(self):  # provide a readable string representation of the object
         return str(self.params)
 
-    def __eq__(self, other):
+    def __eq__(self, other):  # compare instance attributes to define equality.
         return all(getattr(self, t) == getattr(other, t) for t in self.param_types)
 
-    def __lt__(self, other):
+    def __lt__(self, other):  # define ordering for sorting.
         # "<" for tuple is automatically lexicographic ordering
         my_values = tuple(getattr(self, t) for t in self.param_types)
         other_values = tuple(getattr(other, t) for t in self.param_types)
         return my_values < other_values
 
-    def __hash__(self):
+    def __hash__(self):  # make instances hashable for use as dict keys
         return hash(tuple(getattr(self, t) for t in self.param_types))
 
 
@@ -147,8 +149,8 @@ class GridSearch:
 
     def get_transformed_dataset(self, dataset, params):
         """
-        Get and cache the dataset for the given tf-idf params.
-        If the params is cached, it returns the cached dataset directly without computation. (no it)
+        Get and cache the dataset for the given TF-IDF params.
+        If the params is cached, return the cached dataset directly without computation.
 
         Args:
             params (GridParameter): The params to build the dataset.
@@ -161,8 +163,7 @@ class GridSearch:
         if self.no_cache:
             logging.info(f"TFIDF  - Preprocessing: {tfidf_params}")
             if self.datasets["data_format"] not in {"txt", "dataframe"}:
-                logging.info("If the data format is not 'txt' or 'dataframe', the data will not effect by the TF-IDF parameters."
-                             "otherwise the config...")
+                logging.info("Please make sure the data format is 'txt' or 'dataframe'. Otherwise, the TF-IDF parameters have no effect on the dataset.")
             with __silent__():
                 preprocessor = linear.Preprocessor(tfidf_params=asdict(tfidf_params))
                 self._cached_params.tfidf = tfidf_params
@@ -193,7 +194,7 @@ class GridSearch:
     def get_model(self, y, x, params):
         """
         Get and cache the model for the given params.
-        If the params is cached, it returns the cached model directly without computation.
+        If the params is cached, return the cached model directly without computation.
 
         Args:
             y (np.matrix): The labels of the training data.
@@ -236,6 +237,11 @@ class GridSearch:
 
     def __call__(self, search_space_dict: dict[str, list]) -> dict[GridParameter, dict[str, float]]:
         param_names = search_space_dict.keys()
+
+        # To avoid redundant computation (e.g., building the same tree multiple times across different params),
+        # we group identical settings in fields and process them continuously.
+        # This is implemented by sorting the params in the order of the four fields:
+        # TF-IDF, tree, linear, and predict. Finally, cache and reuse the most recent result of each field.
         self.search_space = sorted(
             [
                 GridParameter(dict(zip(param_names, param_values)))
@@ -244,6 +250,7 @@ class GridSearch:
             reverse=True,
         )
 
+        # use -1 as a placeholder since only macro-F1 requires num_classes
         self.param_metrics = {
             params: linear.get_metrics(self.monitor_metrics, num_classes=-1)
             for params in self.search_space

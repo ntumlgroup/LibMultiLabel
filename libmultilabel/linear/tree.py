@@ -64,8 +64,8 @@ class TreeModel:
         Calculate log(sigmoid(prob_A * x)).
 
         Args:
-            x (np.ndarray): A matrix with dimension number of instances * number of classes.
-            prob_A (int): The tunable parameter of probability estimation function, that is sigmoid(prob_A * preds).
+            x (np.ndarray): The decision value matrix with dimension number of instances * number of classes.
+            prob_A (int): The hyperparameter used in the probability estimation function: sigmoid(prob_A * x).
 
         Returns:
             np.ndarray: A matrix with dimension number of instances * number of classes.
@@ -82,8 +82,8 @@ class TreeModel:
 
         Args:
             x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
-            beam_width (int, optional): Number of candidates considered during beam search. Defaults to 10.
-            prob_A (int, optional): The tunable parameter of probability estimation function, that is sigmoid(prob_A * preds). Defaults to 3.
+            beam_width (int, optional): Number of candidates considered during beam search.
+            prob_A (int): The hyperparameter used in the probability estimation function: sigmoid(prob_A * decision_value_matrix).
 
         Returns:
             np.ndarray: A matrix with dimension number of instances * number of classes.
@@ -138,7 +138,7 @@ class TreeModel:
         Args:
             x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
             beam_width (int): Number of top candidate branches considered for prediction.
-            prob_A (int, optional): The tunable parameter of probability estimation function, that is sigmoid(prob_A * preds).
+            prob_A (int): The hyperparameter used in the probability estimation function: sigmoid(prob_A * decision_value_matrix).
 
         Returns:
             np.ndarray: A matrix with dimension number of instances * (number of labels + total number of metalabels).
