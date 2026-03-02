@@ -163,7 +163,9 @@ class GridSearch:
         if self.no_cache:
             logging.info(f"TFIDF  - Preprocessing: {tfidf_params}")
             if self.datasets["data_format"] not in {"txt", "dataframe"}:
-                logging.info("Please make sure the data format is 'txt' or 'dataframe'. Otherwise, the TF-IDF parameters have no effect on the dataset.")
+                logging.info(
+                    "Please make sure the data format is 'txt' or 'dataframe'. Otherwise, the TF-IDF parameters have no effect on the dataset."
+                )
             with __silent__():
                 preprocessor = linear.Preprocessor(tfidf_params=asdict(tfidf_params))
                 self._cached_params.tfidf = tfidf_params
@@ -223,7 +225,8 @@ class GridSearch:
 
         return self._cached_model
 
-    def compute_scores(self, y, x, model, params):
+    @staticmethod
+    def compute_scores(y, x, model, params, param_metrics):
         logging.info(f"Metric - Scoring: {params.predict}\n")
 
         batch_size = 256
@@ -233,7 +236,9 @@ class GridSearch:
         for i in range(num_batches):
             preds = model.predict_values(x[i * batch_size : (i + 1) * batch_size], **asdict(params.predict))
             target = y[i * batch_size : (i + 1) * batch_size].toarray()
-            self.param_metrics[params].update(preds, target)
+            param_metrics[params].update(preds, target)
+
+        return param_metrics
 
     def __call__(self, search_space_dict: dict[str, list]) -> dict[GridParameter, dict[str, float]]:
         param_names = search_space_dict.keys()
@@ -252,8 +257,7 @@ class GridSearch:
 
         # use -1 as a placeholder since only macro-F1 requires num_classes
         self.param_metrics = {
-            params: linear.get_metrics(self.monitor_metrics, num_classes=-1)
-            for params in self.search_space
+            params: linear.get_metrics(self.monitor_metrics, num_classes=-1) for params in self.search_space
         }
 
         permutation = np.random.permutation(self.num_instances)
@@ -261,7 +265,7 @@ class GridSearch:
         for fold in range(self.n_folds):
             index = permutation[
                 int(fold * self.num_instances / self.n_folds) : int((fold + 1) * self.num_instances / self.n_folds)
-                ]
+            ]
             index_per_fold.append(index)
 
         for fold in range(self.n_folds):
@@ -275,7 +279,14 @@ class GridSearch:
 
                 transformed_dataset = self.get_transformed_dataset(fold_dataset, params)
                 model = self.get_model(transformed_dataset["train"]["y"], transformed_dataset["train"]["x"], params)
-                self.compute_scores(transformed_dataset["test"]["y"], transformed_dataset["test"]["x"], model, params)
+
+                self.param_metrics = self.compute_scores(
+                    transformed_dataset["test"]["y"],
+                    transformed_dataset["test"]["x"],
+                    model,
+                    params,
+                    self.param_metrics,
+                )
 
         return {params: metrics.compute() for params, metrics in self.param_metrics.items()}
 
@@ -311,9 +322,12 @@ def main():
         "ngram_range": [(1, 1), (1, 2), (1, 3)],
         "stop_words": ["english"],
         "dmax": [dmax],
-        "K": [np.round(np.power(L, 1/dmax) * np.power(2, alpha) + 0.5).astype(int) for alpha in [-2, 5]],
+        "K": [int(np.round(np.power(L, 1 / dmax) * np.power(2.0, alpha) + 0.5)) for alpha in [-2, 5]],
         "beam_width": [4, 10, 128],
     }
+    for i, K in enumerate(search_space_dict["K"]):
+        if K < 2:
+            search_space_dict["K"][i] = 2
 
     search = GridSearch(dataset, n_folds, monitor_metrics)
     cv_scores = search(search_space_dict)
@@ -324,14 +338,24 @@ def main():
         best_params, best_cv_scores = list(sorted_cv_scores)[0]
         print(best_params, best_cv_scores)
 
-        preprocessor = linear.Preprocessor(tfidf_params=asdict(best_params.tfidf))
-        transformed_dataset = preprocessor.fit_transform(dataset)
-        model = linear.train_tree(
-            transformed_dataset["train"]["y"],
-            transformed_dataset["train"]["x"],
-            best_params.linear_options,
-            **asdict(best_params.tree),
+        with __silent__():
+            preprocessor = linear.Preprocessor(tfidf_params=asdict(best_params.tfidf))
+            transformed_dataset = preprocessor.fit_transform(dataset)
+            model = linear.train_tree(
+                transformed_dataset["train"]["y"],
+                transformed_dataset["train"]["x"],
+                best_params.linear_options,
+                **asdict(best_params.tree),
+            )
+
+        metrics = GridSearch.compute_scores(
+            transformed_dataset["test"]["y"],
+            transformed_dataset["test"]["x"],
+            model,
+            best_params,
+            {best_params: linear.get_metrics(monitor_metrics, num_classes=-1)},
         )
+        print(metrics[best_params].compute())
 
 
 if __name__ == "__main__":
