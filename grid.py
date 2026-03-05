@@ -11,6 +11,7 @@ from libmultilabel.linear.tree import _build_tree
 
 import sklearn.preprocessing
 import numpy as np
+from scipy import sparse
 import math
 
 
@@ -145,16 +146,20 @@ class GridSearch:
             },
         }
 
-    def get_transformed_dataset(self, dataset, params):
+    def get_transformed_dataset(
+        self, dataset: dict[str, dict[str, list[str]]], params: GridParameter
+    ) -> dict[str, dict[str, sparse.csr_matrix]]:
         """
         Get and cache the dataset for the given TF-IDF params.
         If the params is cached, return the cached dataset directly without computation.
 
         Args:
+            dataset (dict[str, dict[str, list[str]]]): The training and/or test data, with keys 'train' and 'test' respectively.
+                The data has keys 'x' for input features and 'y' for labels.
             params (GridParameter): The params to build the dataset.
 
         Returns:
-            dict[str, np.matrix]: The keys should be "y" and "x".
+            dict[str, dict[str, sparse.csr_matrix]]: The transformed dataset.
         """
         tfidf_params = params.tfidf
         self.no_cache = tfidf_params != self._cached_params.tfidf
@@ -191,18 +196,18 @@ class GridSearch:
 
         return self._cached_tree_root
 
-    def get_model(self, y, x, params):
+    def get_model(self, y: sparse.csr_matrix, x: sparse.csr_matrix, params: GridParameter) -> linear.TreeModel:
         """
         Get and cache the model for the given params.
         If the params is cached, return the cached model directly without computation.
 
         Args:
-            y (np.matrix): The labels of the training data.
-            x (np.matrix): The features of the training data.
+            y (sparse.csr_matrix): The labels of the training data.
+            x (sparse.csr_matrix): The features of the training data.
             params (GridParameter): The params to build the model.
 
         Returns:
-            linear.FlatModel | linear.TreeModel: The model for the given params.
+            linear.TreeModel: The model for the given params.
         """
         root = self.get_tree(y, x, params)
 
@@ -224,7 +229,26 @@ class GridSearch:
         return self._cached_model
 
     @staticmethod
-    def compute_scores(y, x, model, params, param_metrics):
+    def compute_scores(
+        y: sparse.csr_matrix,
+        x: sparse.csr_matrix,
+        model: linear.TreeModel,
+        params: GridParameter,
+        param_metrics: dict[str, linear.MetricCollection],
+    ) -> dict[str, linear.MetricCollection]:
+        """
+        Update the metric values in param_metrics with y, x, and model.
+
+        Args:
+            y (sparse.csr_matrix): The labels of the test data.
+            x (sparse.csr_matrix): The features of the test data.
+            model (linear.TreeModel): The trained model.
+            params (GridParameter): The params used to compute the scores.
+            param_metrics (dict[str, linear.MetricCollection]): The metric values for each GridParameter.
+
+        Returns:
+            dict[str, linear.MetricCollection]: The updated metric values.
+        """
         logging.info(f"Metric - Scoring: {params.predict}\n")
 
         batch_size = 256
@@ -239,6 +263,15 @@ class GridSearch:
         return param_metrics
 
     def __call__(self, search_space_dict: dict[str, list]) -> dict[GridParameter, dict[str, float]]:
+        """
+        Run the grid search on the search space.
+
+        Args:
+            search_space_dict (dict[str, list]): The search space for the grid search.
+
+        Returns:
+            dict[GridParameter, dict[str, float]]: The cross-validation scores for each GridParameter in the search space.
+        """
         param_names = search_space_dict.keys()
 
         # To avoid redundant computation (e.g., building the same tree multiple times across different params),
