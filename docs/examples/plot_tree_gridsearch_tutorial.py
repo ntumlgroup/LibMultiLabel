@@ -42,7 +42,7 @@ search_space_dict = {
 # produces a value smaller than 2.
 #
 # We use ``P@1``, ``P@3``, and ``P@5`` for evaluation metrics.
-# 
+#
 # The vectorizer ``TfidfVectorizer`` from ``sklearn`` is used in the TF-IDF stage to generate features from raw text.
 # In the linear stage, the hyperparameters are combined into a LIBLINEAR option string
 # (see *train Usage* in `liblinear <https://github.com/cjlin1/liblinear>`__ README).
@@ -94,8 +94,8 @@ metrics = grid.GridSearch.compute_scores(
     transformed_dataset["test"]["x"],
     model,
     best_params,
-    {best_params: linear.get_metrics(monitor_metrics, num_classes=-1)}
-    )
+    {best_params: linear.get_metrics(monitor_metrics, num_classes=-1)},
+)
 print(metrics[best_params].compute())
 
 ######################################################################
