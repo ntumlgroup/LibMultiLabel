@@ -255,7 +255,9 @@ class GridSearch:
             reverse=True,
         )
 
-        # use -1 as a placeholder since only macro-F1 requires num_classes
+        # When the number of labels is large, evaluation often focuses on top-ranked
+        # metrics (e.g., Precision@K), which do not depend on num_classes.
+        # We therefore use -1 as a placeholder.
         self.param_metrics = {
             params: linear.get_metrics(self.monitor_metrics, num_classes=-1) for params in self.search_space
         }
@@ -316,18 +318,16 @@ def main():
     retrain = True
     n_folds = 3
     dmax = 10
+    K_factors = [-2, 5]
     monitor_metrics = ["P@1", "P@3", "P@5"]
     search_space_dict = {
         "c": [0.5, 1, 2],
         "ngram_range": [(1, 1), (1, 2), (1, 3)],
         "stop_words": ["english"],
         "dmax": [dmax],
-        "K": [int(np.round(np.power(L, 1 / dmax) * np.power(2.0, alpha) + 0.5)) for alpha in [-2, 5]],
+        "K": [max(2, int(np.round(np.power(L, 1 / dmax) * np.power(2.0, alpha) + 0.5))) for alpha in K_factors],
         "beam_width": [4, 10, 128],
     }
-    for i, K in enumerate(search_space_dict["K"]):
-        if K < 2:
-            search_space_dict["K"][i] = 2
 
     search = GridSearch(dataset, n_folds, monitor_metrics)
     cv_scores = search(search_space_dict)

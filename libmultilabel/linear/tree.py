@@ -59,7 +59,7 @@ class TreeModel:
         self.multiclass = False
         self._model_separated = False # Indicates whether the model has been separated for pruning tree.
 
-    def sigmoid_A(self, x: np.ndarray, prob_A: int):
+    def sigmoid_A(self, x: np.ndarray, prob_A: int) -> np.ndarray:
         """
         Calculate log(sigmoid(prob_A * x)).
 
@@ -83,7 +83,7 @@ class TreeModel:
         Args:
             x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
             beam_width (int, optional): Number of candidates considered during beam search.
-            prob_A (int): The hyperparameter used in the probability estimation function: sigmoid(prob_A * decision_value_matrix).
+            prob_A (int, optional): The hyperparameter used in the probability estimation function: sigmoid(prob_A * decision_value_matrix).
 
         Returns:
             np.ndarray: A matrix with dimension number of instances * number of classes.
