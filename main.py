@@ -256,7 +256,7 @@ def add_all_arguments(parser):
         "--prob_A",
         type=int,
         default=3,
-        help="The hyperparameter used in the probability estimation function: sigmoid(prob_A * decision_value_matrix). (default: %(default)s)",
+        help="The hyperparameter used in the probability estimation function for binary classification: sigmoid(prob_A * decision_value_matrix). (default: %(default)s)",
     )
     # AttentionXML
     parser.add_argument(

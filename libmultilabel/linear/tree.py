@@ -61,11 +61,13 @@ class TreeModel:
 
     def sigmoid_A(self, x: np.ndarray, prob_A: int) -> np.ndarray:
         """
-        Calculate log(sigmoid(prob_A * x)).
+        Calculate log(sigmoid(prob_A * x)), which is the positive probability in the binary classification.
 
         Args:
             x (np.ndarray): The decision value matrix with dimension number of instances * number of classes.
-            prob_A (int): The hyperparameter used in the probability estimation function: sigmoid(prob_A * x).
+            prob_A (int):
+                The hyperparameter used in the probability estimation function for
+                binary classification: sigmoid(prob_A * x).
 
         Returns:
             np.ndarray: A matrix with dimension number of instances * number of classes.
@@ -83,7 +85,9 @@ class TreeModel:
         Args:
             x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
             beam_width (int, optional): Number of candidates considered during beam search.
-            prob_A (int, optional): The hyperparameter used in the probability estimation function: sigmoid(prob_A * decision_value_matrix).
+            prob_A (int, optional):
+                The hyperparameter used in the probability estimation function for
+                binary classification: sigmoid(prob_A * decision_value_matrix).
 
         Returns:
             np.ndarray: A matrix with dimension number of instances * number of classes.
@@ -138,7 +142,9 @@ class TreeModel:
         Args:
             x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
             beam_width (int): Number of top candidate branches considered for prediction.
-            prob_A (int): The hyperparameter used in the probability estimation function: sigmoid(prob_A * decision_value_matrix).
+            prob_A (int):
+                The hyperparameter used in the probability estimation function for
+                binary classification: sigmoid(prob_A * decision_value_matrix).
 
         Returns:
             np.ndarray: A matrix with dimension number of instances * (number of labels + total number of metalabels).
@@ -182,7 +188,9 @@ class TreeModel:
         Args:
             instance_preds (np.ndarray): A vector of cached probability estimates of each node, has dimension number of labels + total number of metalabels.
             beam_width (int): Number of candidates considered.
-            prob_A (int, optional): The tunable parameter of probability estimation function, that is sigmoid(prob_A * preds).
+            prob_A (int, optional):
+                The hyperparameter used in the probability estimation function for
+                binary classification: sigmoid(prob_A * decision_value_matrix).
 
         Returns:
             np.ndarray: A vector with dimension number of classes.
