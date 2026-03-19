@@ -151,7 +151,7 @@ class GridSearch:
     ) -> dict[str, dict[str, sparse.csr_matrix]]:
         """
         Get and cache the dataset for the given TF-IDF params.
-        If we had processed the coming params, return the cached dataset directly without computation.
+        If we have processed the coming params, return the cached dataset directly without computation.
 
         Args:
             dataset (dict[str, dict[str, list[str]]]): The training and/or test data, with keys 'train' and 'test' respectively.
@@ -199,7 +199,7 @@ class GridSearch:
     def get_model(self, y: sparse.csr_matrix, x: sparse.csr_matrix, params: GridParameter) -> linear.TreeModel:
         """
         Get and cache the model for the given params.
-        If we had processed the coming params, return the cached model directly without computation.
+        If we have processed the coming params, return the cached model directly without computation.
 
         Args:
             y (sparse.csr_matrix): The labels of the training data.

@@ -61,7 +61,7 @@ class TreeModel:
 
     def sigmoid_A(self, x: np.ndarray, prob_A: int) -> np.ndarray:
         """
-        Calculate log(sigmoid(prob_A * x)), which is the positive probability in the binary classification.
+        Calculate log(sigmoid(prob_A * x)), which represents the probability of the positive class in binary classification.
 
         Args:
             x (np.ndarray): The decision value matrix with dimension number of instances * number of classes.
