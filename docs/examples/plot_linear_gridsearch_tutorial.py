@@ -1,11 +1,14 @@
 """
 Hyperparameter Search for One-vs-rest Linear Methods
 =============================================================
+.. warning::
+
+    If you are using the tree-based linear method,
+    please check `Hyperparameter Search for Tree-Based Linear Method  <../auto_examples/plot_tree_gridsearch_tutorial.html>`_.
+
 This guide helps users to tune the hyperparameters of the feature generation step and the linear model.
-We present ``1vsrest``, ``thresholding``, ``cost_sensitive``, ``cost_sensitive_micro``, and ``binary_and_multiclass``.
-in this guide.
-If you are using the tree-based linear method,
-please check `Hyperparameter Search for Tree-Based Linear Method  <../auto_examples/plot_tree_gridsearch_tutorial.html>`_.
+In this guide, the following methods are available:
+``1vsrest``, ``thresholding``, ``cost_sensitive``, ``cost_sensitive_micro``, and ``binary_and_multiclass``.
 
 Here we show an example of tuning a linear text classifier with the `rcv1 dataset <https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/multilabel.html#rcv1v2%20(topics;%20full%20sets)>`_.
 Starting with loading and preprocessing of the data without using ``Preprocessor``:

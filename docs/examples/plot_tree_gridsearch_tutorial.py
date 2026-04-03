@@ -1,21 +1,26 @@
 """
 Hyperparameter Search for Tree-Based Linear Method
 =============================================================
-This guide helps users to tune the hyperparameters for tree-based linear method.
-If you are using the one-vs-rest linear methods,
-please check `Hyperparameter Search for One-vs-rest Linear Methods  <../auto_examples/plot_linear_gridsearch_tutorial.html>`_.
+.. warning::
 
-The hyperparameters for the tree-based linear method cover several aspects.
-First, during feature generation, we tune the TF-IDF parameters to vectorize the raw text data in different ways.
-Next, when constructing the label tree, we can adjust its depth and width.
-Once the data and label tree are prepared, we can configure the LIBLINEAR options
-to select the solver, tune the cost, and enable/disable the bias.
-Finally, in the tree-based linear method, prediction is not as intuitive as in the one-vs-rest linear methods.
-We need to consider the beam width used to traverse the label tree,
-as well as the function that estimates the probability for each edge.
+    If you are using the one-vs-rest linear methods,
+    please check `Hyperparameter Search for One-vs-rest Linear Methods  <../auto_examples/plot_linear_gridsearch_tutorial.html>`_.
+
+To apply tree-based linear methods,
+we first convert raw text into numerical BoW features.
+During training, the method builds a label tree and trains classifiers.
+At inference, the model traverses the tree to make prediction.
+Each stage involves multiple hyperparameters that can be tuned to improve model performance.
+
+In this guide, we help users tune the hyperparameters of the tree-based linear method.
+
+.. seealso::
+
+    `Implementation Document <https://www.csie.ntu.edu.tw/~cjlin/papers/libmultilabel/libmultilabel_implementation.pdf>`_:
+        For more details about the implementation of tree-based linear methods.
 
 Here we show an example of tuning a tree-based linear text classifier with the `rcv1 dataset <https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/multilabel.html#rcv1v2%20(topics;%20full%20sets)>`_.
-Starting with loading the data and defining the search space:
+Starting with loading the data:
 """
 
 import logging
@@ -28,8 +33,6 @@ datasets = linear.load_dataset("txt", "data/rcv1/train.txt", "data/rcv1/test.txt
 L = len(datasets["train"]["y"])
 
 ######################################################################
-# we enable logging to provide more information during the search process.
-#
 # Next, we set up the search space.
 
 import numpy as np
@@ -37,49 +40,43 @@ import numpy as np
 dmax = 10
 K_factors = [-2, 5]
 search_space_dict = {
-    "s": [1],
-    "c": [0.5, 1, 2],
     "ngram_range": [(1, 1), (1, 2), (1, 3)],
     "stop_words": ["english"],
     "dmax": [dmax],
     "K": [max(2, int(np.round(np.power(L, 1 / dmax) * np.power(2.0, alpha) + 0.5))) for alpha in K_factors],
+    "s": [1],
+    "c": [0.5, 1, 2],
+    "B": [1],
     "beam_width": [10],
 }
 
 ######################################################################
 # Following the suggestions in this `paper <https://drive.google.com/file/d/1kxqNJwg4E_EKjVG-umoG876XKxz3mfm9/view>`__,
 # we define 18 configurations to build a simple yet strong baseline.
-# Since the hyperparameter ``K`` must be at least 2, we also handle the edge case where the equation
-# produces a value smaller than 2.
 #
-# We use ``P@1``, ``P@3``, and ``P@5`` for evaluation metrics.
+# The search space covers several key parts of the pipeline:
 #
-# The vectorizer ``TfidfVectorizer`` from ``sklearn`` is used in the TF-IDF stage to generate features from raw text.
-# In the linear stage, the hyperparameters are combined into a LIBLINEAR option string
-# (see *train Usage* in `liblinear <https://github.com/cjlin1/liblinear>`__ README).
+# - Text feature extraction: (``ngram_range``, ``stop_words``)
 #
-# Available hyperparameters (and their defaults) are defined in the class variables of ``linear.GridParameter``.
+#       - We use the vectorizer ``TfidfVectorizer`` from ``sklearn`` to generate features from raw text.
 #
-# In this example, ``s`` and ``c`` are for solver and cost in the LIBLINEAR,
-# which influence the linear classifiers on each edge in the tree model.
-# Next, ``ngram_range`` and ``stop_words`` are parameters of ``TfidfVectorizer``.
-# ``ngram_range`` control the different n-grams to be extracted,
-# and ``stop_words`` define the very common words to remove from text.
-# We observe that enabling stop words for the data language(s) is an empirically effective approach.
-# For ``dmax`` and ``K``, they are related to the construction of the label tree.
-# We use the formula in the paper to calculate ``K`` (maximum degree of nodes in the tree),
-# which considers ``dmax`` (maximum depth of the tree) and ``L`` (number of instances)
-# along with a scaling factor ``alpha``.
-# Finally, we have ``beam_width`` (number of candidates considered during beam search) for prediction.
+# - Label tree structure: (``dmax``, ``K``)
 #
-# To search for the best setting, we employ ``linear.GridSearch``.
-# First, we should set ``n_folds`` to choose the number of folds in cross-validation
-# and ``monitor_metrics`` to select the desired metrics for the grid search process.
-# We implement the whole search process in ``linear.GridSearch``. You should
-# initialize it with the datasets, the number of folds for cross-validation,
-# and the metrics you want to monitor during the grid search process.
-# You can start the search with the search space, and after the search ends,
-# it returns the scores for ``monitor_metrics`` for each set of ``params`` in the search space.
+#      - Note that ``K`` is the number of clusters and is calculated using the formula from the paper.
+#
+# - Linear classifier: (``s``, ``c``, ``B``)
+#
+#       - We combined them into a LIBLINEAR option string. (see *train Usage* in `liblinear <https://github.com/cjlin1/liblinear>`__ README)
+#
+# - Prediction: (``beam_width``)
+#
+# .. tip::
+#
+#     Available hyperparameters (and their defaults) are defined in the class variables of :py:class:`~libmultilabel.linear.GridParameter`.
+#
+# We implement the entire search process in linear.GridSearch.
+# Initialize it with the dataset, the number of cross-validation folds, 
+# and the evaluation metrics to monitor.
 
 n_folds = 3
 monitor_metrics = ["P@1", "P@3", "P@5"]
