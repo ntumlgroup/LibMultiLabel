@@ -172,6 +172,12 @@ class __silent__:
 
 
 class GridParameter:
+    """A tree-based linear method hyperparameter class for GridSearch.
+    Transform the parameter dict into dataclass instances and handle the defaults.
+
+    Args:
+        params (dict, optional): The keys are the parameter names, and the valus are the parameter values.
+    """
 
     _tfidf_fields = [
         ("ngram_range", tuple[int, int], field(default=(1, 1))),
@@ -207,7 +213,7 @@ class GridParameter:
         param_type: {f.name for f in fields(class_name)} for param_type, class_name in param_types.items()
     }
 
-    def __init__(self, params: dict | None = None, fold: int = -1):
+    def __init__(self, params: dict | None = None):
         self.params = params or {}
 
         params_set = set(self.params)
@@ -243,9 +249,18 @@ class GridParameter:
 
 
 class GridSearch:
+    """Grid search the search space and find the best parameters for tree-based linear method.
+
+    Args:
+        datasets (dict[str, dict[str, list[str]]]): The training and/or test data, with keys 'train' and 'test' respectively.
+                The data has keys 'x' for input features and 'y' for labels.
+        n_folds (int, optional): The number of cross-validation folds.
+        monitor_metrics (list[str], optional): The evaluation metrics to monitor.
+    """
+
     def __init__(
         self,
-        datasets: dict[str, np.matrix],
+        datasets: dict[str, dict[str, list[str]]],
         n_folds: int = 3,
         monitor_metrics: list[str] = ["P@1", "P@3", "P@5"],
     ):
