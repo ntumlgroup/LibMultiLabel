@@ -24,6 +24,7 @@ def linear_test(config, model, datasets, label_mapping):
     predict_kwargs = {}
     if isinstance(model, (TreeModel, EnsembleTreeModel)):
         predict_kwargs["beam_width"] = config.beam_width
+        predict_kwargs["prob_A"] = config.prob_A
 
     for i in tqdm(range(ceil(num_instance / config.eval_batch_size))):
         slice = np.s_[i * config.eval_batch_size : (i + 1) * config.eval_batch_size]
