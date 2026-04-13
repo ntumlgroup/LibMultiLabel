@@ -173,7 +173,8 @@ class __silent__:
 
 class GridParameter:
     """A tree-based linear method hyperparameter class for GridSearch.
-    Transform the parameter dict into dataclass instances and handle the defaults.
+    Transform the parameter dict into dataclass instances.
+    Parameters not in the dict will be set to default values.
 
     Args:
         params (dict, optional): The keys are the parameter names, and the valus are the parameter values.
@@ -249,7 +250,8 @@ class GridParameter:
 
 
 class GridSearch:
-    """Grid search the search space and find the best parameters for tree-based linear method.
+    """Grid search the search space and find the best parameters for the tree-based linear method,
+    according to the monitored metrics.
 
     Args:
         datasets (dict[str, dict[str, list[str]]]): The training and/or test data, with keys 'train' and 'test' respectively.

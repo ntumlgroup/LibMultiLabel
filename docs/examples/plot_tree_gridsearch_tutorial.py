@@ -8,11 +8,12 @@ Hyperparameter Search for Tree-Based Linear Method
 
 To apply tree-based linear methods,
 we first convert raw text into numerical BoW features.
-During training, the method builds a label tree and trains classifiers.
-At inference, the model traverses the tree to make prediction.
-Each stage involves multiple hyperparameters that can be tuned to improve model performance.
+During training, the method builds a label tree and trains linear classifiers.
+At inference, the model traverses the tree and selects
+only a few candidate labels at each level to speed up prediction.
 
-In this guide, we help users tune the hyperparameters of the tree-based linear method.
+To improve model performance, we need to search the hyperparameter space.
+Therefore, in this guide, we help users tune the hyperparameters of the tree-based linear method.
 
 .. seealso::
 
@@ -48,6 +49,7 @@ search_space_dict = {
     "c": [0.5, 1, 2],
     "B": [1],
     "beam_width": [10],
+    "prob_A": [3]
 }
 
 ######################################################################
@@ -62,21 +64,22 @@ search_space_dict = {
 #
 # - Label tree structure: (``dmax``, ``K``)
 #
-#      - Note that ``K`` is the number of clusters and is calculated using the formula from the paper.
+#      - The depth and node degree of the label tree. Note that ``K`` is the number of clusters and is calculated using the formula from the paper.
 #
 # - Linear classifier: (``s``, ``c``, ``B``)
 #
-#       - We combined them into a LIBLINEAR option string. (see *train Usage* in `liblinear <https://github.com/cjlin1/liblinear>`__ README)
+#       - We combined them into a LIBLINEAR option string for training linear classifiers. (see *train Usage* in `liblinear <https://github.com/cjlin1/liblinear>`__ README)
 #
 # - Prediction: (``beam_width``)
+#
+#       - Affect the probability calculation and the number of candidates considered at each level during prediction.
 #
 # .. tip::
 #
 #     Available hyperparameters (and their defaults) are defined in the class variables of :py:class:`~libmultilabel.linear.GridParameter`.
 #
-# We implement the entire search process in linear.GridSearch.
-# Initialize it with the dataset, the number of cross-validation folds, 
-# and the evaluation metrics to monitor.
+# We implement the entire search process in :py:class:`~libmultilabel.linear.GridSearch`.
+# Initialization requires the dataset, the number of cross-validation folds, and the evaluation metrics.
 
 n_folds = 3
 monitor_metrics = ["P@1", "P@3", "P@5"]
@@ -84,8 +87,7 @@ search = linear.GridSearch(datasets, n_folds, monitor_metrics)
 cv_scores = search(search_space_dict)
 
 ######################################################################
-# The returned scores are a ``dict`` whose keys are ``linear.GridParameter`` instances from the search space,
-# and whose values are the scores for ``monitor_metrics``.
+# cv_scores is a dictionary where keys are :py:class:`~libmultilabel.linear.GridParameter` instances and values are the ``monitor_metrics`` results.
 #
 # Here we sort the results in descending order by the first metric in ``monitor_metrics``.
 # You can retrieve the best parameters after the grid search with the following code:
@@ -102,7 +104,7 @@ print(best_params, best_cv_scores)
 #   {'s': 1, 'c': 0.5, 'ngram_range': (1, 2), 'stop_words': 'english', 'dmax': 10, 'K': 88, 'beam_width': 10}
 #
 # We can then retrain using the best parameters,
-# and use ``linear.GridSearch.compute_scores`` and ``linear.get_metrics`` to compute test performance.
+# and use :py:meth:`~libmultilabel.linear.GridSearch.compute_scores` and :py:meth:`~libmultilabel.linear.get_metrics` to compute test performance.
 
 from dataclasses import asdict
 
