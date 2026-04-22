@@ -8,6 +8,8 @@ import logging
 import pathlib
 import pickle
 import re
+from math import ceil
+from tqdm import tqdm
 from typing import Any, Callable
 from dataclasses import make_dataclass, field, fields, asdict
 
@@ -24,7 +26,7 @@ import libmultilabel.linear as linear
 from .preprocessor import Preprocessor
 from .tree import _build_tree
 
-__all__ = ["save_pipeline", "load_pipeline", "MultiLabelEstimator", "GridSearchCV", "GridParameter", "GridSearch"]
+__all__ = ["save_pipeline", "load_pipeline", "MultiLabelEstimator", "GridSearchCV", "TreeGridParameter", "TreeGridSearch"]
 
 
 LINEAR_TECHNIQUES = {
@@ -152,6 +154,81 @@ class GridSearchCV(sklearn.model_selection.GridSearchCV):
         return param_grid
 
 
+def linear_test(
+    y: sparse.csr_matrix,
+    x: sparse.csr_matrix,
+    model: linear.FlatModel | linear.TreeModel | linear.EnsembleTreeModel,
+    eval_batch_size: int = 256,
+    monitor_metrics: list[str] | None = None,
+    metrics: linear.MetricCollection | None = None,
+    predict_kwargs: dict | None = None,
+    beam_width: int | None = None,
+    prob_A: float | None = None,
+    label_mapping: np.ndarray | None = None,
+    save_k_predictions: int | None = None,
+    save_positive_predictions: bool | None = False,
+) -> tuple[linear.MetricCollection, dict, list | np.ndarray, list | np.ndarray]:
+    """
+    Evaluate a linear model on test data with batched prediction and compute metrics.
+
+    Args:
+        y (scipy.sparse.csr_matrix): The labels of the test data with dimensions number of instances * number of classes.
+        x (scipy.sparse.csr_matrix): The features of the test data with dimensions number of instances * number of features.
+        model (linear.FlatModel | linear.TreeModel | linear.EnsembleTreeModel): The trained model.
+        eval_batch_size (int): Batch size used during evaluation.
+        monitor_metrics (list[str], optional): The evaluation metrics to monitor.
+        metrics (linear.MetricCollection, optional): The metric values.
+        predict_kwargs (dict, optional): Extra parameters passed to model.predict_values.
+        beam_width (int, optional): Number of candidates considered during beam search.
+        prob_A (float, optional):
+            The hyperparameter used in the probability estimation function for
+            binary classification: sigmoid(prob_A * decision_value_matrix).
+        label_mapping (np.ndarray, optional): A np.ndarray of class labels that maps each index (from 0 to ``num_class-1``) to its label.
+        save_k_predictions (int, optional): Determine how many classes per instance should be predicted.
+        save_positive_predictions (bool, optional): If True, return all labels and scores with positive decision value.
+
+    Returns:
+        tuple:
+            metrics (linear.MetricCollection): The updated metric values.
+            metric_dict (dict[str, float]): The computed metric results.
+            labels (list or np.ndarray): Labels and scores of top k predictions from decision values if save_k_predictions is set.
+            scores (list or np.ndarray): Labels and scores with positive decision value if save_positive_predictions is True.
+    """
+    if monitor_metrics is None:
+        monitor_metrics = ["P@1", "P@3", "P@5"]
+    if metrics is None:
+        metrics = linear.get_metrics(monitor_metrics, y.shape[1], multiclass=model.multiclass)
+    num_instance = x.shape[0]
+    k = save_k_predictions
+    if k is not None and k > 0:
+        labels = np.zeros((num_instance, k), dtype=object)
+        scores = np.zeros((num_instance, k), dtype="d")
+    else:
+        labels = []
+        scores = []
+
+    if predict_kwargs is None and isinstance(model, (linear.TreeModel, linear.EnsembleTreeModel)):
+        predict_kwargs = {}
+        if beam_width is not None:
+            predict_kwargs["beam_width"] = beam_width
+        if prob_A is not None:
+            predict_kwargs["prob_A"] = prob_A
+
+    for i in tqdm(range(ceil(num_instance / eval_batch_size))):
+        slice = np.s_[i * eval_batch_size : (i + 1) * eval_batch_size]
+        preds = model.predict_values(x[slice], **predict_kwargs)
+        target = y[slice].toarray()
+        metrics.update(preds, target)
+        if k is not None and label_mapping is not None and k > 0:
+            labels[slice], scores[slice] = linear.get_topk_labels(preds, label_mapping, save_k_predictions)
+        elif save_positive_predictions and label_mapping is not None:
+            res = linear.get_positive_labels(preds, label_mapping)
+            labels.append(res[0])
+            scores.append(res[1])
+    metric_dict = metrics.compute()
+    return metrics, metric_dict, labels, scores
+
+
 # suppress inevitable outputs from sparsekmeans and sklearn preprocessors
 class __silent__:
     def __init__(self):
@@ -171,8 +248,8 @@ class __silent__:
         sys.stdout = self.stdout
 
 
-class GridParameter:
-    """A tree-based linear method hyperparameter class for GridSearch.
+class TreeGridParameter:
+    """A tree-based linear method hyperparameter class for TreeGridSearch.
     Transform the parameter dict into dataclass instances.
     Parameters not in the dict will be set to default values.
 
@@ -249,7 +326,7 @@ class GridParameter:
         return hash(tuple(getattr(self, t) for t in self.param_types))
 
 
-class GridSearch:
+class TreeGridSearch:
     """Grid search the search space and find the best parameters for the tree-based linear method,
     according to the monitored metrics.
 
@@ -270,7 +347,7 @@ class GridSearch:
         self.n_folds = n_folds
         self.monitor_metrics = monitor_metrics
 
-        self._cached_params = GridParameter()
+        self._cached_params = TreeGridParameter()
         for param_type in self._cached_params.param_types:
             setattr(self._cached_params, param_type, None)
         self._cached_transformed_dataset = None
@@ -301,7 +378,7 @@ class GridSearch:
         }
 
     def get_transformed_dataset(
-        self, dataset: dict[str, dict[str, list[str]]], params: GridParameter
+        self, dataset: dict[str, dict[str, list[str]]], params: TreeGridParameter
     ) -> dict[str, dict[str, sparse.csr_matrix]]:
         """
         Get and cache the dataset for the given TF-IDF params.
@@ -310,7 +387,7 @@ class GridSearch:
         Args:
             dataset (dict[str, dict[str, list[str]]]): The training and/or test data, with keys 'train' and 'test' respectively.
                 The data has keys 'x' for input features and 'y' for labels.
-            params (GridParameter): The params to build the dataset.
+            params (TreeGridParameter): The params to build the dataset.
 
         Returns:
             dict[str, dict[str, sparse.csr_matrix]]: The transformed dataset.
@@ -350,7 +427,7 @@ class GridSearch:
 
         return self._cached_tree_root
 
-    def get_model(self, y: sparse.csr_matrix, x: sparse.csr_matrix, params: GridParameter) -> linear.TreeModel:
+    def get_model(self, y: sparse.csr_matrix, x: sparse.csr_matrix, params: TreeGridParameter) -> linear.TreeModel:
         """
         Get and cache the model for the given params.
         If we have processed the coming params, return the cached model directly without computation.
@@ -358,7 +435,7 @@ class GridSearch:
         Args:
             y (sparse.csr_matrix): The labels of the training data.
             x (sparse.csr_matrix): The features of the training data.
-            params (GridParameter): The params to build the model.
+            params (TreeGridParameter): The params to build the model.
 
         Returns:
             linear.TreeModel: The model for the given params.
@@ -382,41 +459,7 @@ class GridSearch:
 
         return self._cached_model
 
-    @staticmethod
-    def compute_scores(
-        y: sparse.csr_matrix,
-        x: sparse.csr_matrix,
-        model: linear.TreeModel,
-        params: GridParameter,
-        param_metrics: dict[str, linear.MetricCollection],
-    ) -> dict[str, linear.MetricCollection]:
-        """
-        Update the metric values in param_metrics with y, x, and model.
-
-        Args:
-            y (sparse.csr_matrix): The labels of the test data.
-            x (sparse.csr_matrix): The features of the test data.
-            model (linear.TreeModel): The trained model.
-            params (GridParameter): The params used to compute the scores.
-            param_metrics (dict[str, linear.MetricCollection]): The metric values for each GridParameter.
-
-        Returns:
-            dict[str, linear.MetricCollection]: The updated metric values.
-        """
-        logging.info(f"Metric - Scoring: {params.predict}\n")
-
-        batch_size = 256
-        num_instances = x.shape[0]
-        num_batches = math.ceil(num_instances / batch_size)
-
-        for i in range(num_batches):
-            preds = model.predict_values(x[i * batch_size : (i + 1) * batch_size], **asdict(params.predict))
-            target = y[i * batch_size : (i + 1) * batch_size].toarray()
-            param_metrics[params].update(preds, target)
-
-        return param_metrics
-
-    def __call__(self, search_space_dict: dict[str, list]) -> dict[GridParameter, dict[str, float]]:
+    def __call__(self, search_space_dict: dict[str, list]) -> dict[TreeGridParameter, dict[str, float]]:
         """
         Run the grid search on the search space.
 
@@ -424,7 +467,7 @@ class GridSearch:
             search_space_dict (dict[str, list]): The search space for the grid search.
 
         Returns:
-            dict[GridParameter, dict[str, float]]: The cross-validation scores for each GridParameter in the search space.
+            dict[TreeGridParameter, dict[str, float]]: The cross-validation scores for each TreeGridParameter in the search space.
         """
         param_names = search_space_dict.keys()
 
@@ -434,7 +477,7 @@ class GridSearch:
         # TF-IDF, tree, linear, and predict. Finally, cache and reuse the most recent result of each field.
         self.search_space = sorted(
             [
-                GridParameter(dict(zip(param_names, param_values)))
+                TreeGridParameter(dict(zip(param_names, param_values)))
                 for param_values in itertools.product(*search_space_dict.values())
             ],
             reverse=True,
@@ -467,12 +510,13 @@ class GridSearch:
                 transformed_dataset = self.get_transformed_dataset(fold_dataset, params)
                 model = self.get_model(transformed_dataset["train"]["y"], transformed_dataset["train"]["x"], params)
 
-                self.param_metrics = self.compute_scores(
-                    transformed_dataset["test"]["y"],
-                    transformed_dataset["test"]["x"],
-                    model,
-                    params,
-                    self.param_metrics,
+                logging.info(f"Metric - Scoring: {params.predict}\n")
+                self.param_metrics[params], _, _, _ = linear_test(
+                    y = transformed_dataset["test"]["y"],
+                    x = transformed_dataset["test"]["x"],
+                    model = model,
+                    metrics = self.param_metrics[params],
+                    predict_kwargs = asdict(params.predict),
                 )
 
         return {params: metrics.compute() for params, metrics in self.param_metrics.items()}

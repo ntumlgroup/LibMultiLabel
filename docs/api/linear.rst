@@ -105,12 +105,12 @@ Grid Search with Sklearn Estimators
 Grid Search for Tree-Based Linear Method
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autoclass:: GridParameter
+.. autoclass:: TreeGridParameter
    :members:
 
    .. automethod:: __init__
 
-.. autoclass:: GridSearch
+.. autoclass:: TreeGridSearch
    :members:
 
    .. automethod:: __init__

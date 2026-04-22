@@ -6,39 +6,8 @@ from tqdm import tqdm
 
 import libmultilabel.linear as linear
 from libmultilabel.common_utils import dump_log, is_multiclass_dataset
-from libmultilabel.linear.tree import EnsembleTreeModel, TreeModel, train_ensemble_tree
-from libmultilabel.linear.utils import LINEAR_TECHNIQUES
-
-
-def linear_test(config, model, datasets, label_mapping):
-    metrics = linear.get_metrics(config.monitor_metrics, datasets["test"]["y"].shape[1], multiclass=model.multiclass)
-    num_instance = datasets["test"]["x"].shape[0]
-    k = config.save_k_predictions
-    if k > 0:
-        labels = np.zeros((num_instance, k), dtype=object)
-        scores = np.zeros((num_instance, k), dtype="d")
-    else:
-        labels = []
-        scores = []
-
-    predict_kwargs = {}
-    if isinstance(model, (TreeModel, EnsembleTreeModel)):
-        predict_kwargs["beam_width"] = config.beam_width
-        predict_kwargs["prob_A"] = config.prob_A
-
-    for i in tqdm(range(ceil(num_instance / config.eval_batch_size))):
-        slice = np.s_[i * config.eval_batch_size : (i + 1) * config.eval_batch_size]
-        preds = model.predict_values(datasets["test"]["x"][slice], **predict_kwargs)
-        target = datasets["test"]["y"][slice].toarray()
-        metrics.update(preds, target)
-        if k > 0:
-            labels[slice], scores[slice] = linear.get_topk_labels(preds, label_mapping, config.save_k_predictions)
-        elif config.save_positive_predictions:
-            res = linear.get_positive_labels(preds, label_mapping)
-            labels.append(res[0])
-            scores.append(res[1])
-    metric_dict = metrics.compute()
-    return metric_dict, labels, scores
+from libmultilabel.linear.tree import train_ensemble_tree
+from libmultilabel.linear.utils import LINEAR_TECHNIQUES, linear_test
 
 
 def linear_train(datasets, config):
@@ -104,7 +73,7 @@ def linear_run(config):
         ), """
             If save_k_predictions is larger than 0, only top k labels are saved.
             Save all labels with decision value larger than 0 by using save_positive_predictions and save_k_predictions=0."""
-        metric_dict, labels, scores = linear_test(config, model, datasets, preprocessor.label_mapping)
+        metrics, metric_dict, labels, scores = linear_test(model, datasets, preprocessor.label_mapping, config)
         dump_log(config=config, metrics=metric_dict, split="test", log_path=config.log_path)
         print(linear.tabulate_metrics(metric_dict, "test"))
         if config.save_k_predictions > 0:

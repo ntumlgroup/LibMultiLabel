@@ -7,7 +7,7 @@ Hyperparameter Search for Tree-Based Linear Method
     please check `Hyperparameter Search for One-vs-rest Linear Methods  <../auto_examples/plot_linear_gridsearch_tutorial.html>`_.
 
 To apply tree-based linear methods,
-we first convert raw text into numerical BoW features.
+we first convert raw text into numerical TF-IDF features.
 During training, the method builds a label tree and trains linear classifiers.
 At inference, the model traverses the tree and selects
 only a few candidate labels at each level to speed up prediction.
@@ -56,7 +56,7 @@ search_space_dict = {
 # Following the suggestions in this `paper <https://drive.google.com/file/d/1kxqNJwg4E_EKjVG-umoG876XKxz3mfm9/view>`__,
 # we define 18 configurations to build a simple yet strong baseline.
 #
-# The search space covers several key parts of the pipeline:
+# The search space covers several key parts of the search process:
 #
 # - Text feature extraction: (``ngram_range``, ``stop_words``)
 #
@@ -70,24 +70,25 @@ search_space_dict = {
 #
 #       - We combined them into a LIBLINEAR option string for training linear classifiers. (see *train Usage* in `liblinear <https://github.com/cjlin1/liblinear>`__ README)
 #
-# - Prediction: (``beam_width``)
+# - Prediction: (``beam_width``, ``prob_A``)
 #
-#       - Affect the probability calculation and the number of candidates considered at each level during prediction.
+#       - The number of candidates considered and the parameter for the probability estimation function at each level during prediction.
 #
 # .. tip::
 #
-#     Available hyperparameters (and their defaults) are defined in the class variables of :py:class:`~libmultilabel.linear.GridParameter`.
+#     Available hyperparameters (and their defaults) are defined in the class variables of :py:class:`~libmultilabel.linear.TreeGridParameter`.
 #
-# We implement the entire search process in :py:class:`~libmultilabel.linear.GridSearch`.
+# In :py:class:`~libmultilabel.linear.TreeGridSearch`,
+# we applied cross-validation for evaluation by splitting the training data into ``n_folds`` folds and evaluating each fold.
 # Initialization requires the dataset, the number of cross-validation folds, and the evaluation metrics.
 
 n_folds = 3
 monitor_metrics = ["P@1", "P@3", "P@5"]
-search = linear.GridSearch(datasets, n_folds, monitor_metrics)
+search = linear.TreeGridSearch(datasets, n_folds, monitor_metrics)
 cv_scores = search(search_space_dict)
 
 ######################################################################
-# cv_scores is a dictionary where keys are :py:class:`~libmultilabel.linear.GridParameter` instances and values are the ``monitor_metrics`` results.
+# cv_scores is a dictionary where keys are :py:class:`~libmultilabel.linear.TreeGridParameter` instances and values are the ``monitor_metrics`` results.
 #
 # Here we sort the results in descending order by the first metric in ``monitor_metrics``.
 # You can retrieve the best parameters after the grid search with the following code:
@@ -104,7 +105,7 @@ print(best_params, best_cv_scores)
 #   {'s': 1, 'c': 0.5, 'ngram_range': (1, 2), 'stop_words': 'english', 'dmax': 10, 'K': 88, 'beam_width': 10}
 #
 # We can then retrain using the best parameters,
-# and use :py:meth:`~libmultilabel.linear.GridSearch.compute_scores` and :py:meth:`~libmultilabel.linear.get_metrics` to compute test performance.
+# and use :py:meth:`~libmultilabel.linear.TreeGridSearch.compute_scores` and :py:meth:`~libmultilabel.linear.get_metrics` to compute test performance.
 
 from dataclasses import asdict
 
@@ -118,14 +119,15 @@ model = linear.train_tree(
     **asdict(best_params.tree),
 )
 
-metrics = linear.GridSearch.compute_scores(
-    transformed_dataset["test"]["y"],
-    transformed_dataset["test"]["x"],
-    model,
-    best_params,
-    {best_params: linear.get_metrics(monitor_metrics, num_classes=-1)},
+metrics, _, _, _ = linear.linear_test(
+    y = transformed_dataset["test"]["y"],
+    x = transformed_dataset["test"]["x"],
+    model = model,
+    metrics = {best_params: linear.get_metrics(monitor_metrics, num_classes=-1)},
+    predict_kwargs = asdict(best_params.predict),
 )
-print(metrics[best_params].compute())
+
+print(metrics.compute())
 
 ######################################################################
 # The result of the best parameters will look similar to::
