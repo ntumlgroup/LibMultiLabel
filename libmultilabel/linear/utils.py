@@ -209,7 +209,7 @@ def linear_test(
 
     if predict_kwargs is None:
         predict_kwargs = {}
-        if isinstance(model, (linear.TreeModel, linear.EnsembleTreeModel))
+        if isinstance(model, (linear.TreeModel, linear.EnsembleTreeModel)):
             if beam_width is not None:
                 predict_kwargs["beam_width"] = beam_width
             if prob_A is not None:
