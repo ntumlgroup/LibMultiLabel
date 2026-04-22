@@ -511,12 +511,13 @@ class TreeGridSearch:
                 model = self.get_model(transformed_dataset["train"]["y"], transformed_dataset["train"]["x"], params)
 
                 logging.info(f"Metric - Scoring: {params.predict}\n")
-                self.param_metrics[params], _, _, _ = linear_test(
-                    y = transformed_dataset["test"]["y"],
-                    x = transformed_dataset["test"]["x"],
-                    model = model,
-                    metrics = self.param_metrics[params],
-                    predict_kwargs = asdict(params.predict),
-                )
+                with __silent__():
+                    self.param_metrics[params], _, _, _ = linear_test(
+                        y = transformed_dataset["test"]["y"],
+                        x = transformed_dataset["test"]["x"],
+                        model = model,
+                        metrics = self.param_metrics[params],
+                        predict_kwargs = asdict(params.predict),
+                    )
 
         return {params: metrics.compute() for params, metrics in self.param_metrics.items()}

@@ -73,7 +73,18 @@ def linear_run(config):
         ), """
             If save_k_predictions is larger than 0, only top k labels are saved.
             Save all labels with decision value larger than 0 by using save_positive_predictions and save_k_predictions=0."""
-        metrics, metric_dict, labels, scores = linear_test(model, datasets, preprocessor.label_mapping, config)
+        metrics, metric_dict, labels, scores = linear_test(
+            y = datasets["test"]["y"],
+            x = datasets["test"]["x"],
+            model = model,
+            eval_batch_size = config.eval_batch_size,
+            monitor_metrics = config.monitor_metrics,
+            beam_width = config.beam_width,
+            prob_A = config.prob_A,
+            label_mapping = preprocessor.label_mapping,
+            save_k_predictions = config.save_k_predictions,
+            save_positive_predictions = config.save_positive_predictions,
+        )
         dump_log(config=config, metrics=metric_dict, split="test", log_path=config.log_path)
         print(linear.tabulate_metrics(metric_dict, "test"))
         if config.save_k_predictions > 0:
