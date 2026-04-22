@@ -207,12 +207,13 @@ def linear_test(
         labels = []
         scores = []
 
-    if predict_kwargs is None and isinstance(model, (linear.TreeModel, linear.EnsembleTreeModel)):
+    if predict_kwargs is None:
         predict_kwargs = {}
-        if beam_width is not None:
-            predict_kwargs["beam_width"] = beam_width
-        if prob_A is not None:
-            predict_kwargs["prob_A"] = prob_A
+        if isinstance(model, (linear.TreeModel, linear.EnsembleTreeModel))
+            if beam_width is not None:
+                predict_kwargs["beam_width"] = beam_width
+            if prob_A is not None:
+                predict_kwargs["prob_A"] = prob_A
 
     for i in tqdm(range(ceil(num_instance / eval_batch_size))):
         slice = np.s_[i * eval_batch_size : (i + 1) * eval_batch_size]
