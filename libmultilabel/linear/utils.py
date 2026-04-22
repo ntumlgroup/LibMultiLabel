@@ -166,7 +166,7 @@ def linear_test(
     prob_A: float | None = None,
     label_mapping: np.ndarray | None = None,
     save_k_predictions: int | None = None,
-    save_positive_predictions: bool | None = False,
+    save_positive_predictions: bool | None = None,
 ) -> tuple[linear.MetricCollection, dict, list | np.ndarray, list | np.ndarray]:
     """
     Evaluate a linear model on test data with batched prediction and compute metrics.
@@ -185,7 +185,7 @@ def linear_test(
             binary classification: sigmoid(prob_A * decision_value_matrix).
         label_mapping (np.ndarray, optional): A np.ndarray of class labels that maps each index (from 0 to ``num_class-1``) to its label.
         save_k_predictions (int, optional): Determine how many classes per instance should be predicted.
-        save_positive_predictions (bool, optional): If True, return all labels and scores with positive decision value.
+        save_positive_predictions (bool, optional): Whether to save labels and scores with positive decision scores.
 
     Returns:
         tuple:
