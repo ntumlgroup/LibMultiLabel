@@ -105,7 +105,7 @@ print(best_params, best_cv_scores)
 #   {'s': 1, 'c': 0.5, 'ngram_range': (1, 2), 'stop_words': 'english', 'dmax': 10, 'K': 88, 'beam_width': 10}
 #
 # We can then retrain using the best parameters,
-# and use :py:meth:`~libmultilabel.linear.TreeGridSearch.compute_scores` and :py:meth:`~libmultilabel.linear.get_metrics` to compute test performance.
+# and use :py:meth:`~libmultilabel.linear.linear_test` and :py:meth:`~libmultilabel.linear.get_metrics` to compute test performance.
 
 from dataclasses import asdict
 

@@ -34,6 +34,8 @@ The simplest usage is::
 
 .. autofunction:: get_positive_labels
 
+.. autofunction:: linear_test
+
 .. autoclass:: FlatModel
    :members:
 
