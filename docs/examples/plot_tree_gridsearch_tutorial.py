@@ -18,7 +18,7 @@ Therefore, in this guide, we help users tune the hyperparameters of the tree-bas
 .. seealso::
 
     `Implementation Document <https://www.csie.ntu.edu.tw/~cjlin/papers/libmultilabel/libmultilabel_implementation.pdf>`_:
-        For more details about the implementation of tree-based linear methods.
+        For more details about the implementation of tree-based linear methods and hyperparameter search.
 
 Here we show an example of tuning a tree-based linear text classifier with the `rcv1 dataset <https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/multilabel.html#rcv1v2%20(topics;%20full%20sets)>`_.
 Starting with loading the data:
@@ -53,7 +53,7 @@ search_space_dict = {
 }
 
 ######################################################################
-# Following the suggestions in this `paper <https://drive.google.com/file/d/1kxqNJwg4E_EKjVG-umoG876XKxz3mfm9/view>`__,
+# Following the suggestions in the `implementation document <https://www.csie.ntu.edu.tw/~cjlin/papers/libmultilabel/libmultilabel_implementation.pdf>`_,
 # we define 18 configurations to build a simple yet strong baseline.
 #
 # The search space covers several key parts of the search process:
@@ -64,7 +64,7 @@ search_space_dict = {
 #
 # - Label tree structure: (``dmax``, ``K``)
 #
-#      - The depth and node degree of the label tree. Note that ``K`` is the number of clusters and is calculated using the formula from the paper.
+#      - The depth and node degree of the label tree. Note that ``K`` is the number of clusters and is calculated using the formula from the `implementation document <https://www.csie.ntu.edu.tw/~cjlin/papers/libmultilabel/libmultilabel_implementation.pdf>`_.
 #
 # - Linear classifier: (``s``, ``c``, ``B``)
 #
@@ -78,8 +78,10 @@ search_space_dict = {
 #
 #     Available hyperparameters (and their defaults) are defined in the class variables of :py:class:`~libmultilabel.linear.TreeGridParameter`.
 #
-# In :py:class:`~libmultilabel.linear.TreeGridSearch`,
-# we applied cross-validation for evaluation by splitting the training data into ``n_folds`` folds and evaluating each fold.
+# In :py:class:`~libmultilabel.linear.TreeGridSearch`, we perform cross-validation for evaluation.
+# Specifically, we split the training data into ``n_folds``,
+# sequentially using each fold as the validation set while training on the remaining folds.
+# Finally, we aggregate the validation outputs from each fold and compute the ``monitor_metrics``.
 # Initialization requires the dataset, the number of cross-validation folds, and the evaluation metrics.
 
 n_folds = 3
@@ -88,7 +90,7 @@ search = linear.TreeGridSearch(datasets, n_folds, monitor_metrics)
 cv_scores = search(search_space_dict)
 
 ######################################################################
-# cv_scores is a dictionary where keys are :py:class:`~libmultilabel.linear.TreeGridParameter` instances and values are the ``monitor_metrics`` results.
+# ``cv_scores`` is a dictionary where keys are :py:class:`~libmultilabel.linear.TreeGridParameter` instances and values are the ``monitor_metrics`` results.
 #
 # Here we sort the results in descending order by the first metric in ``monitor_metrics``.
 # You can retrieve the best parameters after the grid search with the following code:
@@ -102,7 +104,11 @@ print(best_params, best_cv_scores)
 ######################################################################
 # The best parameters are::
 #
-#   {'s': 1, 'c': 0.5, 'ngram_range': (1, 2), 'stop_words': 'english', 'dmax': 10, 'K': 88, 'beam_width': 10}
+#   {'ngram_range': (1, 3), 'stop_words': 'english', 'dmax': 10, 'K': 88, 's': 1, 'c': 1, 'B': 1, 'beam_width': 10, 'prob_A': 3}
+#
+# with best cross-validation scores::
+#
+#   {'P@1': 0.9669, 'P@3': 0.8137, 'P@5': 0.5640}
 #
 # We can then retrain using the best parameters,
 # and use :py:meth:`~libmultilabel.linear.linear_test` and :py:meth:`~libmultilabel.linear.get_metrics` to compute test performance.
@@ -123,7 +129,7 @@ metrics, _, _, _ = linear.linear_test(
     y = transformed_dataset["test"]["y"],
     x = transformed_dataset["test"]["x"],
     model = model,
-    metrics = {best_params: linear.get_metrics(monitor_metrics, num_classes=-1)},
+    metrics = linear.get_metrics(monitor_metrics, num_classes=-1),
     predict_kwargs = asdict(best_params.predict),
 )
 
@@ -132,4 +138,4 @@ print(metrics.compute())
 ######################################################################
 # The result of the best parameters will look similar to::
 #
-#   {'P@1': 0.8100209275981901, 'P@3': 0.7310622302718446, 'P@5': 0.5290965293466371}
+#   {'P@1': 0.9554, 'P@3': 0.7968, 'P@5': 0.5576}

@@ -42,6 +42,9 @@ The simplest usage is::
 .. autoclass:: TreeModel
    :members:
 
+.. autoclass:: EnsembleTreeModel
+   :members:
+
 Load Dataset
 ^^^^^^^^^^^^
 

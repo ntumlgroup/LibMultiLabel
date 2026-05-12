@@ -26,7 +26,7 @@ import libmultilabel.linear as linear
 from .preprocessor import Preprocessor
 from .tree import _build_tree
 
-__all__ = ["save_pipeline", "load_pipeline", "MultiLabelEstimator", "GridSearchCV", "TreeGridParameter", "TreeGridSearch"]
+__all__ = ["save_pipeline", "load_pipeline", "MultiLabelEstimator", "GridSearchCV", "linear_test", "TreeGridParameter", "TreeGridSearch"]
 
 
 LINEAR_TECHNIQUES = {
@@ -188,11 +188,24 @@ def linear_test(
         save_positive_predictions (bool, optional): Whether to save labels and scores with positive decision scores.
 
     Returns:
-        tuple:
-            metrics (linear.MetricCollection): The updated metric values.
-            metric_dict (dict[str, float]): The computed metric results.
-            labels (list or np.ndarray): Labels and scores of top k predictions from decision values if save_k_predictions is set.
-            scores (list or np.ndarray): Labels and scores with positive decision value if save_positive_predictions is True.
+        tuple[linear.MetricCollection, dict, list | np.ndarray, list | np.ndarray]:
+        A tuple containing:
+            metrics (linear.MetricCollection)
+                The updated metric values.
+            metric_dict (dict[str, float])
+                The computed metric results.
+            labels (list or np.ndarray)
+                If ``save_k_predictions`` is set, an np.ndarray containing the labels of
+                top k predictions from decision values.
+                Else if ``save_positive_predictions`` is True, a list with the labels with
+                positive decision values.
+                Otherwise, an empty list.
+            scores (list or np.ndarray)
+                If ``save_k_predictions`` is set, an np.ndarray containing the scores of
+                top k predictions from decision values.
+                Else if ``save_positive_predictions`` is True, a list with the scores with
+                positive decision values.
+                Otherwise, an empty list.
     """
     if monitor_metrics is None:
         monitor_metrics = ["P@1", "P@3", "P@5"]
