@@ -50,6 +50,7 @@ main() {
   rm $REPORT_PATH
   TEST_FILES_WithoutOutput=(
     "plot_linear_gridsearch_tutorial.py"
+    "plot_tree_gridsearch_tutorial.py"
     "plot_dataset_tutorial.py"
   )
   for file_name in "${TEST_FILES_WithoutOutput[@]}"; do
