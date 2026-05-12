@@ -34,10 +34,15 @@ The simplest usage is::
 
 .. autofunction:: get_positive_labels
 
+.. autofunction:: linear_test
+
 .. autoclass:: FlatModel
    :members:
 
 .. autoclass:: TreeModel
+   :members:
+
+.. autoclass:: EnsembleTreeModel
    :members:
 
 Load Dataset
@@ -101,3 +106,18 @@ Grid Search with Sklearn Estimators
    :members:
 
    .. automethod:: __init__
+
+Grid Search for Tree-Based Linear Method
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autoclass:: TreeGridParameter
+   :members:
+
+   .. automethod:: __init__
+
+.. autoclass:: TreeGridSearch
+   :members:
+
+   .. automethod:: __init__
+
+   .. automethod:: __call__
