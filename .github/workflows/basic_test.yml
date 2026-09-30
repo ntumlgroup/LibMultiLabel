@@ -27,3 +27,5 @@ jobs:
       - name: Run basic test
         run: |
           tests/basic.sh
+      - name: Test tree memory assembly
+        run: python -m unittest discover -s tests/linear -p 'test_*.py'

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 from typing import Callable
 
 import numpy as np
@@ -16,6 +17,7 @@ __all__ = ["train_tree", "TreeModel", "train_ensemble_tree", "EnsembleTreeModel"
 
 DEFAULT_K = 100
 DEFAULT_DMAX = 10
+_WEIGHT_CHUNK_SIZE = 1 << 20  # At most 8 MiB per chunk for float64 weights or int64 indices.
 
 
 class Node:
@@ -235,6 +237,11 @@ def train_tree(
     """Train a linear model for multi-label data using a divide-and-conquer strategy.
     The algorithm used is based on https://github.com/xmc-aalto/bonsai.
 
+    Node weights are staged in a temporary file during training to avoid retaining
+    a second copy of the model while assembling the final CSC weight matrix.
+    The temporary directory (configurable with TMPDIR) needs space for the sparse
+    node weights. The returned model is held in memory and does not depend on this file.
+
     Args:
         y (sparse.csr_matrix): A 0/1 matrix with dimensions number of instances * number of classes.
         x (sparse.csr_matrix): A matrix with dimensions number of instances * number of features.
@@ -252,6 +259,7 @@ def train_tree(
         label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
         root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
         root.is_root = True
+        del label_representation
 
     num_nodes = 0
     # Both type(x) and type(y) are sparse.csr_matrix
@@ -265,6 +273,7 @@ def train_tree(
         node.num_features_used = np.count_nonzero(features_used_perlabel[:, node.label_map].sum(axis=1))
 
     root.dfs(count)
+    del features_used_perlabel
 
     model_size = get_estimated_model_size(root)
     print(f"The estimated tree model size is: {model_size / (1024**3):.3f} GB")
@@ -286,10 +295,10 @@ def train_tree(
             _train_node(y[relevant_instances], x[relevant_instances], options, node)
         pbar.update()
 
-    root.dfs(visit)
-    pbar.close()
-
-    flat_model, node_ptr = _flatten_model(root)
+    try:
+        flat_model, node_ptr = _flatten_model(root, train_node=visit)
+    finally:
+        pbar.close()
     return TreeModel(root, flat_model, node_ptr)
 
 
@@ -374,7 +383,7 @@ def _train_node(y: sparse.csr_matrix, x: sparse.csr_matrix, options: str, node: 
     node.model.weights = sparse.csc_matrix(node.model.weights)
 
 
-def _flatten_model(root: Node) -> tuple[linear.FlatModel, np.ndarray]:
+def _flatten_model(root: Node, train_node: Callable[[Node], None] | None = None) -> tuple[linear.FlatModel, np.ndarray]:
     """Flatten tree weight matrices into a single weight matrix. The flattened weight
     matrix is used to predict all possible values, which is cached for beam search.
     This pessimizes complexity but is faster in practice.
@@ -386,33 +395,79 @@ def _flatten_model(root: Node) -> tuple[linear.FlatModel, np.ndarray]:
 
     Args:
         root (Node): Root of the tree.
+        train_node (Callable, optional): Train each node immediately before staging
+            its weights. If omitted, all nodes must already have trained models.
 
     Returns:
         tuple[linear.FlatModel, np.ndarray]: The flattened model and the ranges of each node.
     """
-    index = 0
-    weights = []
-    bias = root.model.bias
+    node_ptr = [0]
+    node_nnz = []
+    bias = None
+    num_features = None
+    data_dtype = None
 
-    def visit(node):
-        assert bias == node.model.bias
-        nonlocal index
-        node.index = index
-        index += 1
-        weights.append(node.model.__dict__.pop("weights"))
+    # Staging before allocation avoids keeping all node weights and the flattened
+    # matrix in RAM together. A single file also avoids one open file per node.
+    with tempfile.TemporaryFile(prefix="libmultilabel-weights-") as weights_file:
 
-    root.dfs(visit)
+        def visit(node):
+            nonlocal bias, num_features, data_dtype
+            if train_node is not None:
+                train_node(node)
+            weights = sparse.csc_matrix(node.model.weights, copy=False)
+            if node is root:
+                bias = node.model.bias
+                num_features = weights.shape[0]
+                data_dtype = weights.dtype
+            assert bias == node.model.bias
+            if weights.shape[0] != num_features:
+                raise ValueError("Node weight matrices must have the same number of features.")
+            data_dtype = np.result_type(data_dtype, weights.dtype)
+            node.index = len(node_nnz)
+            node_ptr.append(node_ptr[-1] + weights.shape[1])
+            node_nnz.append(weights.nnz)
+
+            for array in (weights.data[: weights.nnz], weights.indices[: weights.nnz], weights.indptr[:-1]):
+                for start in range(0, array.size, _WEIGHT_CHUNK_SIZE):
+                    np.save(weights_file, array[start : start + _WEIGHT_CHUNK_SIZE], allow_pickle=False)
+            del node.model.weights
+
+        root.dfs(visit)
+
+        node_ptr = np.asarray(node_ptr, dtype=np.int64)
+        total_nnz = sum(node_nnz)
+        num_classifiers = int(node_ptr[-1])
+        # Both indices and indptr must use int64 once any dimension or the
+        # cumulative NNZ exceeds int32, even if every node individually fits.
+        index_dtype = np.int64 if max(num_features, num_classifiers, total_nnz) > np.iinfo(np.int32).max else np.int32
+        data = np.empty(total_nnz, dtype=data_dtype)
+        indices = np.empty(total_nnz, dtype=index_dtype)
+        indptr = np.empty(num_classifiers + 1, dtype=index_dtype)
+
+        weights_file.seek(0)
+        offset = 0
+        for i, nnz in enumerate(node_nnz):
+            end = offset + nnz
+            columns = slice(node_ptr[i], node_ptr[i + 1])
+            for array in (data[offset:end], indices[offset:end], indptr[columns]):
+                for start in range(0, array.size, _WEIGHT_CHUNK_SIZE):
+                    array[start : start + _WEIGHT_CHUNK_SIZE] = np.load(weights_file, allow_pickle=False)
+            # Offset in the destination dtype to avoid overflowing int32 node pointers.
+            indptr[columns] += offset
+            offset = end
+        indptr[-1] = total_nnz
+
+    # Matching index dtypes let SciPy reuse these buffers without a full-model copy.
+    weights = sparse.csc_matrix((data, indices, indptr), shape=(num_features, num_classifiers), copy=False)
 
     model = linear.FlatModel(
         name="flattened-tree",
-        weights=sparse.hstack(weights, "csc"),
+        weights=weights,
         bias=bias,
         thresholds=0,
         multiclass=False,
     )
-
-    # w.shape[1] is the number of labels/metalabels of each node
-    node_ptr = np.cumsum([0] + list(map(lambda w: w.shape[1], weights)))
 
     return model, node_ptr
 

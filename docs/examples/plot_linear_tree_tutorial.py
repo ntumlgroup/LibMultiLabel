@@ -55,6 +55,26 @@ print("Training time of tree-based: {:10.2f}".format(training_end - training_sta
 #
 #   The ``train_tree`` function in this tutorial is based on the work of :cite:t:`SK20a`.
 #
+# Memory use during training
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~
+#
+# Tree training writes each node's sparse weights to a temporary file and releases
+# them before training the next node. It then allocates the final CSC matrix once
+# and fills it in chunks of at most 8 MiB for float64 weights. This avoids keeping
+# all node matrices and the concatenated model in memory at the same time, while
+# preserving weight precision, classifier order, and the saved model format.
+#
+# Final assembly needs memory for the final sparse model, one chunk, and small
+# bookkeeping arrays. Training data, the tree structure, a node's training workspace,
+# and previously trained ensemble members still require additional memory.
+#
+# Allow temporary disk space roughly equal to the total sparse node weights, plus
+# array headers. The temporary file is closed automatically on success or failure.
+# Set ``TMPDIR`` before starting Python to use a disk with sufficient free space;
+# avoid a RAM-backed temporary directory if the goal is to reduce physical RAM use.
+# This trades a sequential write/read of the model for lower peak RAM. The returned
+# model is fully in memory and does not depend on the temporary file.
+#
 # ``train_tree`` achieves this speedup by approximating ``train_1vsrest``. To check whether the approximation
 # performs well, we'll compute some metrics on the test set.
 
